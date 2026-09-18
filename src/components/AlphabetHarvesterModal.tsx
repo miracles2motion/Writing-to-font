@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Sparkles,
   CheckCircle2,
@@ -8,8 +8,16 @@ import {
   Wand2,
   FileText,
   HelpCircle,
+  Cpu,
+  Zap,
+  ListOrdered,
+  RefreshCw,
+  SlidersHorizontal,
+  ChevronDown,
+  Key,
 } from "lucide-react";
 import { DetectedGlyph, AlphabetHarvestResult } from "../types";
+import { SEQUENCE_PATTERNS, performNormalHarvest, getCharacterCasing } from "../utils/glyphUtils";
 
 interface AlphabetHarvesterModalProps {
   isOpen: boolean;
@@ -19,27 +27,43 @@ interface AlphabetHarvesterModalProps {
   harvestResult: AlphabetHarvestResult | null;
   isLoading: boolean;
   onApplyHarvest: (resolvedResult: AlphabetHarvestResult, mode: "replace" | "keep-all") => void;
+  onRunAiHarvest?: () => void;
   onOpenExpanderModal?: () => void;
   onUpdateFontName?: (name: string) => void;
+  onOpenApiKeyModal?: () => void;
 }
 
 export const AlphabetHarvesterModal: React.FC<AlphabetHarvesterModalProps> = ({
   isOpen,
   onClose,
   glyphs,
+  sourceImageUrl,
   harvestResult,
   isLoading,
   onApplyHarvest,
+  onRunAiHarvest,
   onOpenExpanderModal,
   onUpdateFontName,
+  onOpenApiKeyModal,
 }) => {
-  const [activeTab, setActiveTab] = useState<"all" | "upper" | "lower" | "digits" | "symbols">("all");
+  // Mode Selection: "normal" (Offline Local Spatial Sort) vs "ai" (Gemini Multimodal OCR)
+  const [harvestMode, setHarvestMode] = useState<"normal" | "ai">("normal");
+  const [selectedPattern, setSelectedPattern] = useState<string>("A-Z_a-z_0-9");
+  const [activeCategoryTab, setActiveCategoryTab] = useState<"all" | "upper" | "lower" | "digits" | "symbols">("all");
   const [applyMode, setApplyMode] = useState<"replace" | "keep-all">("replace");
+
+  // Normal Mode Result (computed dynamically in-browser in real time)
+  const normalHarvestResult = useMemo(() => {
+    return performNormalHarvest(glyphs, selectedPattern);
+  }, [glyphs, selectedPattern]);
 
   if (!isOpen) return null;
 
-  const resolved = harvestResult?.resolvedCharacters || [];
-  const missing = harvestResult?.missingStandardCharacters || [];
+  // Select active result depending on current mode
+  const activeResult = harvestMode === "ai" && harvestResult ? harvestResult : normalHarvestResult;
+
+  const resolved = activeResult?.resolvedCharacters || [];
+  const missing = activeResult?.missingStandardCharacters || [];
 
   const upperList = resolved.filter((r) => r.casing === "upper");
   const lowerList = resolved.filter((r) => r.casing === "lower");
@@ -47,10 +71,10 @@ export const AlphabetHarvesterModal: React.FC<AlphabetHarvesterModalProps> = ({
   const symbolList = resolved.filter((r) => r.casing === "symbol");
 
   const filteredResolved = resolved.filter((r) => {
-    if (activeTab === "upper") return r.casing === "upper";
-    if (activeTab === "lower") return r.casing === "lower";
-    if (activeTab === "digits") return r.casing === "digit";
-    if (activeTab === "symbols") return r.casing === "symbol";
+    if (activeCategoryTab === "upper") return r.casing === "upper";
+    if (activeCategoryTab === "lower") return r.casing === "lower";
+    if (activeCategoryTab === "digits") return r.casing === "digit";
+    if (activeCategoryTab === "symbols") return r.casing === "symbol";
     return true;
   });
 
@@ -58,22 +82,22 @@ export const AlphabetHarvesterModal: React.FC<AlphabetHarvesterModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-neutral-900 border border-neutral-700/80 rounded-3xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div className="bg-neutral-900 border border-neutral-700/80 rounded-3xl w-full max-w-5xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-5 border-b border-neutral-800 flex items-center justify-between bg-neutral-900/90">
+        <div className="px-6 py-4 sm:py-5 border-b border-neutral-800 flex items-center justify-between bg-neutral-900/95">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20 text-neutral-950">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20 text-neutral-950 font-bold">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-neutral-100 flex items-center gap-2">
-                <span>One-Click Alphabet Harvester from Notes</span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-semibold border border-amber-500/20">
-                  AI Resolved
+              <h2 className="text-base sm:text-lg font-bold text-neutral-100 flex items-center gap-2">
+                <span>Alphabet Harvester</span>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-semibold border border-amber-500/20">
+                  {harvestMode === "normal" ? "⚡ Normal (Instant Local)" : "✨ AI Vision Mode"}
                 </span>
               </h2>
               <p className="text-xs text-neutral-400">
-                Singles out unique A-Z, a-z, 0-9 & symbols from scattered handwriting and picks the highest quality exemplars.
+                Single out unique A-Z, a-z, 0-9 &amp; symbols from your handwriting.
               </p>
             </div>
           </div>
@@ -85,9 +109,92 @@ export const AlphabetHarvesterModal: React.FC<AlphabetHarvesterModalProps> = ({
           </button>
         </div>
 
+        {/* Top Mode Selector Bar: Normal (Offline Local) vs AI Vision Mode */}
+        <div className="px-6 py-3 border-b border-neutral-800 bg-neutral-950/80 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 bg-neutral-900 p-1 rounded-2xl border border-neutral-750">
+            <button
+              type="button"
+              onClick={() => setHarvestMode("normal")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition active:scale-95 ${
+                harvestMode === "normal"
+                  ? "bg-amber-500 text-neutral-950 shadow-md shadow-amber-500/20"
+                  : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60"
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>Normal Mode (Instant Local)</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${harvestMode === "normal" ? "bg-neutral-950/20 text-neutral-950" : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"}`}>
+                Offline 0s
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setHarvestMode("ai");
+                if (!harvestResult && !isLoading && onRunAiHarvest) {
+                  onRunAiHarvest();
+                }
+              }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition active:scale-95 ${
+                harvestMode === "ai"
+                  ? "bg-amber-500 text-neutral-950 shadow-md shadow-amber-500/20"
+                  : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60"
+              }`}
+            >
+              <Cpu className="w-3.5 h-3.5" />
+              <span>AI Vision Mode (Gemini)</span>
+              {harvestResult && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              )}
+            </button>
+          </div>
+
+          {/* Mode Context Controls */}
+          {harvestMode === "normal" ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-neutral-400 hidden sm:inline">Sequence Preset:</span>
+              <select
+                value={selectedPattern}
+                onChange={(e) => setSelectedPattern(e.target.value)}
+                className="bg-neutral-850 border border-neutral-700 text-neutral-200 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-amber-400"
+              >
+                {SEQUENCE_PATTERNS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onRunAiHarvest}
+                disabled={isLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3 h-3 ${isLoading ? "animate-spin" : ""}`} />
+                <span>{isLoading ? "Scanning..." : "Re-Scan with AI"}</span>
+              </button>
+              {onOpenApiKeyModal && (
+                <button
+                  type="button"
+                  onClick={onOpenApiKeyModal}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 transition"
+                  title="Configure Gemini API Key"
+                >
+                  <Key className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Key Settings</span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Content Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {isLoading ? (
+          {isLoading && harvestMode === "ai" ? (
             <div className="text-center py-16 space-y-5 max-w-md mx-auto animate-in fade-in">
               <div className="w-14 h-14 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto shadow-lg shadow-amber-500/10" />
               <div className="space-y-2">
@@ -98,40 +205,70 @@ export const AlphabetHarvesterModal: React.FC<AlphabetHarvesterModalProps> = ({
                   Pinpointing character coordinates, verifying upper/lower cases, and selecting highest-clarity exemplars.
                 </p>
                 <div className="p-3 bg-neutral-800/60 border border-neutral-700/60 rounded-xl text-xs text-neutral-300">
-                  💡 <strong>Prefer instant local extraction?</strong> You can cancel anytime to use 100% offline local extraction and sequential mapping with zero waiting.
+                  💡 <strong>Want results immediately?</strong> Switch to <strong>Normal Mode</strong> above for 100% in-browser offline extraction with zero waiting!
                 </div>
               </div>
               <button
                 type="button"
-                onClick={onClose}
+                onClick={() => setHarvestMode("normal")}
                 className="px-4 py-2 rounded-xl text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 transition"
               >
-                Cancel & Return to Standard Extraction
+                Switch to Normal Instant Extraction
               </button>
             </div>
-          ) : harvestResult ? (
+          ) : harvestMode === "ai" && !harvestResult ? (
+            <div className="text-center py-16 space-y-4 max-w-md mx-auto animate-in fade-in">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
+                <FileText className="w-6 h-6" />
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="text-base font-bold text-neutral-200">
+                  Ready to Analyze Document with AI
+                </h3>
+                <p className="text-xs text-neutral-400 leading-relaxed">
+                  Gemini Vision OCR will scan full sentences, extract individual characters from words, and select the cleanest instances.
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={onRunAiHarvest}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-500 to-orange-500 text-neutral-950 shadow-lg shadow-amber-500/20 transition active:scale-95"
+                >
+                  ✨ Run AI Document Scan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHarvestMode("normal")}
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition"
+                >
+                  ⚡ Use Normal Mode Instead
+                </button>
+              </div>
+            </div>
+          ) : activeResult ? (
             <>
               {/* Executive Summary Banner */}
-              <div className="bg-neutral-850 border border-neutral-700/80 rounded-2xl p-4 sm:p-5 space-y-3">
+              <div className="bg-neutral-850 border border-neutral-700/80 rounded-2xl p-4 sm:p-5 space-y-3 shadow-md">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400">
-                      Handwriting Classification
+                      {harvestMode === "normal" ? "Normal Mode In-Browser Extraction" : "AI Vision Handwriting Classification"}
                     </span>
                     <h3 className="text-base font-bold text-neutral-100">
-                      {harvestResult.handwritingStyle || "Handwritten Script"}
+                      {activeResult.handwritingStyle || "Natural Handwritten Script"}
                     </h3>
                   </div>
 
-                  {harvestResult.suggestedFontName && (
+                  {activeResult.suggestedFontName && (
                     <div className="flex items-center gap-2 bg-neutral-900 px-3 py-1.5 rounded-xl border border-neutral-700">
                       <span className="text-xs text-neutral-400">Suggested Name:</span>
                       <span className="text-xs font-bold text-neutral-100 font-mono">
-                        {harvestResult.suggestedFontName}
+                        {activeResult.suggestedFontName}
                       </span>
                       {onUpdateFontName && (
                         <button
-                          onClick={() => onUpdateFontName(harvestResult.suggestedFontName!)}
+                          onClick={() => onUpdateFontName(activeResult.suggestedFontName!)}
                           className="text-[11px] font-bold text-amber-400 hover:text-amber-300 underline underline-offset-2 ml-1"
                         >
                           Use
@@ -142,7 +279,7 @@ export const AlphabetHarvesterModal: React.FC<AlphabetHarvesterModalProps> = ({
                 </div>
 
                 <p className="text-xs text-neutral-300 leading-relaxed">
-                  {harvestResult.summary}
+                  {activeResult.summary}
                 </p>
 
                 {/* Stat pills */}
@@ -161,7 +298,7 @@ export const AlphabetHarvesterModal: React.FC<AlphabetHarvesterModalProps> = ({
                   </span>
                   {duplicatesDiscarded > 0 && (
                     <span className="px-2.5 py-1 rounded-lg bg-neutral-800 text-neutral-400 border border-neutral-700">
-                      🗑️ {duplicatesDiscarded} Duplicate/Stray Instances Filtered
+                      🗑️ {duplicatesDiscarded} Stray Instances Filtered
                     </span>
                   )}
                 </div>
@@ -169,14 +306,14 @@ export const AlphabetHarvesterModal: React.FC<AlphabetHarvesterModalProps> = ({
 
               {/* Missing Characters Alert (if any) */}
               {missing.length > 0 && (
-                <div className="bg-amber-950/20 border border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="bg-amber-950/20 border border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-md">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 text-amber-400 font-bold text-xs">
                       <AlertTriangle className="w-4 h-4 text-amber-400" />
-                      <span>{missing.length} Standard Characters Missing from Notes</span>
+                      <span>{missing.length} Standard Characters Missing from Extraction</span>
                     </div>
                     <p className="text-xs text-neutral-300">
-                      Not found in the written text:{" "}
+                      Not found in the image:{" "}
                       <span className="font-mono text-amber-200 font-bold">
                         {missing.slice(0, 16).join(" ")}
                         {missing.length > 16 ? ` +${missing.length - 16} more` : ""}
@@ -190,7 +327,7 @@ export const AlphabetHarvesterModal: React.FC<AlphabetHarvesterModalProps> = ({
                         onClose();
                         onOpenExpanderModal();
                       }}
-                      className="whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-neutral-950 transition active:scale-95 shadow"
+                      className="whitespace-nowrap flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-neutral-950 transition active:scale-95 shadow"
                     >
                       <Wand2 className="w-3.5 h-3.5" />
                       <span>Synthesize Missing ({missing.length})</span>
@@ -202,9 +339,9 @@ export const AlphabetHarvesterModal: React.FC<AlphabetHarvesterModalProps> = ({
               {/* Tabs for Category Breakdown */}
               <div className="flex items-center gap-1.5 border-b border-neutral-800 pb-2 overflow-x-auto">
                 <button
-                  onClick={() => setActiveTab("all")}
+                  onClick={() => setActiveCategoryTab("all")}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                    activeTab === "all"
+                    activeCategoryTab === "all"
                       ? "bg-amber-500 text-neutral-950 font-bold"
                       : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800"
                   }`}
@@ -212,9 +349,9 @@ export const AlphabetHarvesterModal: React.FC<AlphabetHarvesterModalProps> = ({
                   All Singled Out ({resolved.length})
                 </button>
                 <button
-                  onClick={() => setActiveTab("upper")}
+                  onClick={() => setActiveCategoryTab("upper")}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                    activeTab === "upper"
+                    activeCategoryTab === "upper"
                       ? "bg-blue-500 text-white font-bold"
                       : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800"
                   }`}
@@ -222,9 +359,9 @@ export const AlphabetHarvesterModal: React.FC<AlphabetHarvesterModalProps> = ({
                   Uppercase [A-Z] ({upperList.length})
                 </button>
                 <button
-                  onClick={() => setActiveTab("lower")}
+                  onClick={() => setActiveCategoryTab("lower")}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                    activeTab === "lower"
+                    activeCategoryTab === "lower"
                       ? "bg-amber-500 text-neutral-950 font-bold"
                       : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800"
                   }`}
@@ -232,9 +369,9 @@ export const AlphabetHarvesterModal: React.FC<AlphabetHarvesterModalProps> = ({
                   Lowercase [a-z] ({lowerList.length})
                 </button>
                 <button
-                  onClick={() => setActiveTab("digits")}
+                  onClick={() => setActiveCategoryTab("digits")}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                    activeTab === "digits"
+                    activeCategoryTab === "digits"
                       ? "bg-indigo-500 text-white font-bold"
                       : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800"
                   }`}
@@ -242,9 +379,9 @@ export const AlphabetHarvesterModal: React.FC<AlphabetHarvesterModalProps> = ({
                   Digits [0-9] ({digitList.length})
                 </button>
                 <button
-                  onClick={() => setActiveTab("symbols")}
+                  onClick={() => setActiveCategoryTab("symbols")}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                    activeTab === "symbols"
+                    activeCategoryTab === "symbols"
                       ? "bg-neutral-700 text-neutral-100 font-bold"
                       : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800"
                   }`}
@@ -263,10 +400,10 @@ export const AlphabetHarvesterModal: React.FC<AlphabetHarvesterModalProps> = ({
                   return (
                     <div
                       key={`${item.char}-${idx}`}
-                      className="bg-neutral-800/80 border border-neutral-700 rounded-2xl p-3 flex flex-col justify-between space-y-2 hover:border-amber-500/40 transition group"
+                      className="bg-neutral-850/90 border border-neutral-750 rounded-2xl p-3 flex flex-col justify-between space-y-2 hover:border-amber-500/40 transition group shadow-sm"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="w-8 h-8 rounded-lg bg-neutral-900 border border-neutral-700 flex items-center justify-center font-mono text-base font-bold text-amber-400 shadow-inner">
+                        <span className="w-8 h-8 rounded-xl bg-neutral-900 border border-neutral-700 flex items-center justify-center font-mono text-base font-bold text-amber-400 shadow-inner">
                           {item.char}
                         </span>
                         <span
@@ -301,10 +438,10 @@ export const AlphabetHarvesterModal: React.FC<AlphabetHarvesterModalProps> = ({
                       <div className="text-[11px] text-neutral-400 truncate" title={item.notes || item.sourceWord}>
                         {item.sourceWord ? (
                           <span className="text-neutral-300">
-                            Word: <span className="text-amber-300 font-medium">"{item.sourceWord}"</span>
+                            {item.sourceWord}
                           </span>
                         ) : (
-                          <span>Quality: {Math.round((item.qualityScore || 0.9) * 100)}%</span>
+                          <span>Quality: {Math.round((item.qualityScore || 0.95) * 100)}%</span>
                         )}
                       </div>
                     </div>
@@ -312,16 +449,11 @@ export const AlphabetHarvesterModal: React.FC<AlphabetHarvesterModalProps> = ({
                 })}
               </div>
             </>
-          ) : (
-            <div className="text-center py-16 text-neutral-400">
-              <FileText className="w-10 h-10 mx-auto text-neutral-600 mb-2" />
-              <p>No document analysis results yet.</p>
-            </div>
-          )}
+          ) : null}
         </div>
 
         {/* Footer Actions */}
-        <div className="px-6 py-4 border-t border-neutral-800 bg-neutral-900/90 flex flex-wrap items-center justify-between gap-4">
+        <div className="px-6 py-4 border-t border-neutral-800 bg-neutral-950/90 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-2 text-xs text-neutral-300 cursor-pointer">
               <input
@@ -331,7 +463,7 @@ export const AlphabetHarvesterModal: React.FC<AlphabetHarvesterModalProps> = ({
                 onChange={() => setApplyMode("replace")}
                 className="text-amber-500 focus:ring-amber-500"
               />
-              <span>Replace scattered glyphs with clean curated alphabet</span>
+              <span>Replace glyphs with curated set</span>
             </label>
             <label className="flex items-center gap-2 text-xs text-neutral-400 cursor-pointer">
               <input
@@ -355,16 +487,18 @@ export const AlphabetHarvesterModal: React.FC<AlphabetHarvesterModalProps> = ({
             <button
               id="btn-apply-curated-harvest"
               onClick={() => {
-                if (harvestResult) {
-                  onApplyHarvest(harvestResult, applyMode);
+                if (activeResult) {
+                  onApplyHarvest(activeResult, applyMode);
                   onClose();
                 }
               }}
-              disabled={!harvestResult || resolved.length === 0}
+              disabled={!activeResult || resolved.length === 0}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-neutral-950 shadow-lg shadow-amber-500/20 active:scale-95 transition disabled:opacity-50"
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>Apply Curated Alphabet (1-Click Resolution)</span>
+              <span>
+                Apply Harvest ({resolved.length} Glyphs)
+              </span>
             </button>
           </div>
         </div>

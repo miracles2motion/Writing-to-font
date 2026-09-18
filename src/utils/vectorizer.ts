@@ -213,6 +213,123 @@ export function extractGlyphContours(
 }
 
 /**
+ * Extracts vector contours from a local binary mask of dimensions [width x height].
+ */
+export function extractGlyphContoursFromLocalMask(
+  localMask: Uint8Array,
+  width: number,
+  height: number,
+  smoothing = 1.8
+): Point[][] {
+  const pad = 2;
+  const w = width + pad * 2;
+  const h = height + pad * 2;
+  const localGrid = new Uint8Array(w * h);
+
+  for (let ly = 0; ly < height; ly++) {
+    for (let lx = 0; lx < width; lx++) {
+      if (localMask[ly * width + lx] === 1) {
+        localGrid[(ly + pad) * w + (lx + pad)] = 1;
+      }
+    }
+  }
+
+  type Segment = [Point, Point];
+  const segments: Segment[] = [];
+
+  for (let y = 0; y < h - 1; y++) {
+    for (let x = 0; x < w - 1; x++) {
+      const tl = localGrid[y * w + x];
+      const tr = localGrid[y * w + (x + 1)];
+      const br = localGrid[(y + 1) * w + (x + 1)];
+      const bl = localGrid[(y + 1) * w + x];
+
+      const caseId = (tl << 3) | (tr << 2) | (br << 1) | bl;
+      if (caseId === 0 || caseId === 15) continue;
+
+      const top: Point = { x: x + 0.5, y };
+      const right: Point = { x: x + 1, y: y + 0.5 };
+      const bottom: Point = { x: x + 0.5, y: y + 1 };
+      const left: Point = { x, y: y + 0.5 };
+
+      switch (caseId) {
+        case 1: segments.push([bottom, left]); break;
+        case 2: segments.push([right, bottom]); break;
+        case 3: segments.push([right, left]); break;
+        case 4: segments.push([top, right]); break;
+        case 5: segments.push([top, right]); segments.push([bottom, left]); break;
+        case 6: segments.push([top, bottom]); break;
+        case 7: segments.push([top, left]); break;
+        case 8: segments.push([left, top]); break;
+        case 9: segments.push([bottom, top]); break;
+        case 10: segments.push([left, top]); segments.push([right, bottom]); break;
+        case 11: segments.push([right, top]); break;
+        case 12: segments.push([left, right]); break;
+        case 13: segments.push([bottom, right]); break;
+        case 14: segments.push([left, bottom]); break;
+      }
+    }
+  }
+
+  const loops: Point[][] = [];
+  const remaining = [...segments];
+
+  while (remaining.length > 0) {
+    const startSeg = remaining.pop()!;
+    const loop: Point[] = [startSeg[0], startSeg[1]];
+
+    let closed = false;
+    let maxSteps = 2000;
+
+    while (!closed && maxSteps-- > 0) {
+      const currentHead = loop[loop.length - 1];
+      let foundIndex = -1;
+      let reverse = false;
+
+      for (let i = 0; i < remaining.length; i++) {
+        const seg = remaining[i];
+        if (Math.hypot(seg[0].x - currentHead.x, seg[0].y - currentHead.y) < 0.1) {
+          foundIndex = i;
+          reverse = false;
+          break;
+        } else if (Math.hypot(seg[1].x - currentHead.x, seg[1].y - currentHead.y) < 0.1) {
+          foundIndex = i;
+          reverse = true;
+          break;
+        }
+      }
+
+      if (foundIndex >= 0) {
+        const nextSeg = remaining.splice(foundIndex, 1)[0];
+        const nextPt = reverse ? nextSeg[0] : nextSeg[1];
+
+        if (Math.hypot(nextPt.x - loop[0].x, nextPt.y - loop[0].y) < 0.4) {
+          closed = true;
+        } else {
+          loop.push(nextPt);
+        }
+      } else {
+        closed = true;
+      }
+    }
+
+    if (loop.length >= 4) {
+      const adjusted = loop.map((pt) => ({
+        x: pt.x - pad,
+        y: pt.y - pad,
+      }));
+
+      const simplified = simplifyDouglasPeucker(adjusted, Math.max(0.4, smoothing));
+      if (simplified.length >= 3) {
+        loops.push(simplified);
+      }
+    }
+  }
+
+  return loops;
+}
+
+/**
  * Converts loops into SVG path string for preview and rendering.
  */
 export function contoursToSvgPath(contours: Point[][]): string {

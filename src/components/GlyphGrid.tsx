@@ -176,14 +176,14 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
                 onClick={onHarvestAlphabetFromNotes}
                 disabled={isHarvesting || isAiLabeling || glyphs.length === 0}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 hover:from-amber-400 hover:to-orange-400 active:scale-95 text-neutral-950 shadow-lg shadow-amber-500/20 disabled:opacity-50 transition border border-amber-400/40"
-                title="Single out unique A-Z, a-z, 0-9 & symbols from scattered handwriting and select cleanest exemplars in 1 click"
+                title="Single out unique A-Z, a-z, 0-9 & symbols using Normal In-Browser sorting or AI Vision scan"
               >
                 {isHarvesting ? (
                   <div className="w-3.5 h-3.5 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin" />
                 ) : (
                   <Sparkles className="w-3.5 h-3.5" />
                 )}
-                <span>{isHarvesting ? "Analyzing Scattered Notes..." : "⚡ Harvest Alphabet from Notes"}</span>
+                <span>{isHarvesting ? "Analyzing Notes..." : "⚡ Harvest Alphabet (Normal / AI)"}</span>
               </button>
             )}
 

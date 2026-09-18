@@ -793,6 +793,11 @@ export default function App() {
     }
   };
 
+  // Open Alphabet Harvester Modal
+  const handleOpenHarvesterModal = () => {
+    setIsHarvesterModalOpen(true);
+  };
+
   // AI 1-Click Alphabet Harvester from Notes (with API key check and fast timeout)
   const handleHarvestAlphabetFromNotes = async () => {
     if (!sourceImageUrl) {
@@ -803,7 +808,7 @@ export default function App() {
     // Step 1: Check if an API key is available
     const hasKey = await checkHasActiveAiKey();
     if (!hasKey) {
-      showToast("Please configure your Gemini API Key in App Settings to use Vision AI Harvester, or use 1-click Auto-Sequence!");
+      showToast("Please configure your Gemini API Key in App Settings to use Vision AI Harvester, or use Normal Local Extraction!");
       setIsApiKeyModalOpen(true);
       return;
     }
@@ -1101,7 +1106,7 @@ export default function App() {
             onAiAutoLabel={handleAiAutoLabel}
             onProceedToMetrics={() => setCurrentTab("metrics")}
             onOpenExpanderModal={() => setIsExpanderModalOpen(true)}
-            onHarvestAlphabetFromNotes={handleHarvestAlphabetFromNotes}
+            onHarvestAlphabetFromNotes={handleOpenHarvesterModal}
             isAiLabeling={isAiLabeling}
             isHarvesting={isHarvestingAlphabet}
           />
@@ -1155,7 +1160,7 @@ export default function App() {
         detectedCount={processingState.detectedCount}
       />
 
-      {/* One-Click Alphabet Harvester Modal for Scattered Notes */}
+      {/* One-Click Alphabet Harvester Modal with Normal (Offline) and AI Vision Modes */}
       <AlphabetHarvesterModal
         isOpen={isHarvesterModalOpen}
         onClose={() => setIsHarvesterModalOpen(false)}
@@ -1164,7 +1169,9 @@ export default function App() {
         harvestResult={harvestResult}
         isLoading={isHarvestingAlphabet}
         onApplyHarvest={handleApplyHarvest}
+        onRunAiHarvest={handleHarvestAlphabetFromNotes}
         onOpenExpanderModal={() => setIsExpanderModalOpen(true)}
+        onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
         onUpdateFontName={(newName) =>
           setFontSettings((prev) => ({
             ...prev,
