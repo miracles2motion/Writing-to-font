@@ -11,12 +11,14 @@ import {
   ImageProcessingSettings,
   SheetQualityAssessment,
   StudioTab,
+  AlphabetHarvestResult,
 } from "./types";
 import { generateSampleSheet } from "./utils/sampleSheets";
 import {
   removeBackgroundAndBinarize,
   segmentGlyphs,
   evaluateSheetQuality,
+  cropGlyphFromNormBox,
   ProcessedImageResult,
 } from "./utils/imageProcessor";
 import { extractGlyphContours } from "./utils/vectorizer";
@@ -29,8 +31,9 @@ import { downloadColorAssetPackZip } from "./utils/colorAssetExporter";
 import { SEQUENCE_PATTERNS } from "./utils/glyphUtils";
 import { ProcessingOverlay } from "./components/ProcessingOverlay";
 import { CharacterExpanderModal } from "./components/CharacterExpanderModal";
+import { AlphabetHarvesterModal } from "./components/AlphabetHarvesterModal";
 import { ApiKeyModal, getCustomApiKey, getCustomModelPreference } from "./components/ApiKeyModal";
-import { getAiRequestHeaders } from "./utils/aiClient";
+import { getAiRequestHeaders, checkHasActiveAiKey } from "./utils/aiClient";
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<StudioTab>("upload");
@@ -90,6 +93,9 @@ export default function App() {
   const [compiledFontResult, setCompiledFontResult] = useState<FontBuildResult | null>(null);
   const [isBuildingFont, setIsBuildingFont] = useState(false);
   const [isAiLabeling, setIsAiLabeling] = useState(false);
+  const [isHarvestingAlphabet, setIsHarvestingAlphabet] = useState(false);
+  const [harvestResult, setHarvestResult] = useState<AlphabetHarvestResult | null>(null);
+  const [isHarvesterModalOpen, setIsHarvesterModalOpen] = useState(false);
   const [isExpanderModalOpen, setIsExpanderModalOpen] = useState(false);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [hasCustomApiKey, setHasCustomApiKey] = useState(() => Boolean(getCustomApiKey()));
@@ -112,6 +118,7 @@ export default function App() {
   }, []);
 
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const settingsDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const showToast = useCallback((msg: string) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -229,20 +236,27 @@ export default function App() {
             currentStepIndex: 3,
           }));
         }
-        await new Promise((resolve) => setTimeout(resolve, 40));
+        await new Promise((resolve) => setTimeout(resolve, 30));
 
         const glyphsWithContours = detected.map((g) => {
-          const contours = extractGlyphContours(
-            result.binaryMask,
-            result.width,
-            result.height,
-            g.bbox,
-            settings.smoothing
-          );
-          return {
-            ...g,
-            contours,
-          };
+          try {
+            const contours = extractGlyphContours(
+              result.binaryMask,
+              result.width,
+              result.height,
+              g.bbox,
+              settings.smoothing
+            );
+            return {
+              ...g,
+              contours,
+            };
+          } catch (e) {
+            return {
+              ...g,
+              contours: [],
+            };
+          }
         });
 
         setGlyphs(glyphsWithContours);
@@ -256,12 +270,16 @@ export default function App() {
             currentStepIndex: 4,
           }));
         }
-        await new Promise((resolve) => setTimeout(resolve, 40));
+        await new Promise((resolve) => setTimeout(resolve, 30));
 
         if (glyphsWithContours.length > 0) {
-          const fontRes = buildFontFromGlyphs(glyphsWithContours, fontSettings);
-          setCompiledFontResult(fontRes);
-          await applyDynamicFontFace(fontSettings.family, fontRes.arrayBuffer);
+          try {
+            const fontRes = buildFontFromGlyphs(glyphsWithContours, fontSettings);
+            setCompiledFontResult(fontRes);
+            await applyDynamicFontFace(fontSettings.family, fontRes.arrayBuffer);
+          } catch (compileErr) {
+            console.warn("Initial auto-compile skipped:", compileErr);
+          }
         }
 
         if (showOverlay) {
@@ -272,7 +290,7 @@ export default function App() {
             currentStepIndex: 4,
           }));
           // Brief pause so user sees 100% completion
-          await new Promise((resolve) => setTimeout(resolve, 350));
+          await new Promise((resolve) => setTimeout(resolve, 200));
           setProcessingState((prev) => ({ ...prev, isOpen: false }));
         }
 
@@ -422,12 +440,17 @@ export default function App() {
     img.src = dataUrl;
   };
 
-  // Update Image processing settings and re-run cutout
+  // Update Image processing settings and re-run cutout smoothly without flashing fullscreen modal
   const handleUpdateImageSettings = (newSettings: Partial<ImageProcessingSettings>) => {
     const updated = { ...imageSettings, ...newSettings };
     setImageSettings(updated);
     if (sourceImageElement) {
-      processImage(sourceImageElement, updated, { fileName: "Re-processing Settings", showModal: true });
+      if (settingsDebounceRef.current) {
+        clearTimeout(settingsDebounceRef.current);
+      }
+      settingsDebounceRef.current = setTimeout(() => {
+        processImage(sourceImageElement, updated, { fileName: "Adjusting Parameters", showModal: false });
+      }, 150);
     }
   };
 
@@ -693,18 +716,30 @@ export default function App() {
     showToast(`Sequenced characters using pattern: ${matched?.name || patternId}`);
   };
 
-  // AI Auto-label with Gemini
+  // AI Auto-label with Gemini (with API key check and fast timeout)
   const handleAiAutoLabel = async () => {
     if (!sourceImageUrl) {
       showToast("No image loaded to analyze.");
       return;
     }
 
+    // Step 1: Check if an API key is available
+    const hasKey = await checkHasActiveAiKey();
+    if (!hasKey) {
+      handleAutoSequence("A-Z_a-z_0-9");
+      showToast("No Gemini key configured: Sequenced characters locally (A-Z, a-z, 0-9)!");
+      return;
+    }
+
     setIsAiLabeling(true);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+
     try {
       const res = await fetch("/api/ai/recognize-glyphs", {
         method: "POST",
         headers: getAiRequestHeaders(),
+        signal: controller.signal,
         body: JSON.stringify({
           imageBase64: sourceImageUrl,
           mimeType: "image/png",
@@ -746,12 +781,257 @@ export default function App() {
       );
     } catch (err: any) {
       console.error("AI auto-label error:", err);
-      // Fallback for static hosting (GitHub Pages)
       handleAutoSequence("A-Z_a-z_0-9");
-      showToast("Auto-sequenced A-Z, a-z, 0-9. (AI vision requires backend server)");
+      showToast(
+        err.name === "AbortError"
+          ? "AI request timed out. Switched to offline local sequence (A-Z, a-z, 0-9)!"
+          : "AI auto-label unavailable. Applied offline local sequence (A-Z, a-z, 0-9)."
+      );
     } finally {
+      clearTimeout(timeoutId);
       setIsAiLabeling(false);
     }
+  };
+
+  // AI 1-Click Alphabet Harvester from Notes (with API key check and fast timeout)
+  const handleHarvestAlphabetFromNotes = async () => {
+    if (!sourceImageUrl) {
+      showToast("No document image loaded to analyze.");
+      return;
+    }
+
+    // Step 1: Check if an API key is available
+    const hasKey = await checkHasActiveAiKey();
+    if (!hasKey) {
+      showToast("Please configure your Gemini API Key in App Settings to use Vision AI Harvester, or use 1-click Auto-Sequence!");
+      setIsApiKeyModalOpen(true);
+      return;
+    }
+
+    setIsHarvestingAlphabet(true);
+    setIsHarvesterModalOpen(true);
+    setHarvestResult(null);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 22000);
+
+    try {
+      const res = await fetch("/api/ai/harvest-alphabet-from-notes", {
+        method: "POST",
+        headers: getAiRequestHeaders(),
+        signal: controller.signal,
+        body: JSON.stringify({
+          imageBase64: sourceImageUrl,
+          mimeType: "image/png",
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to harvest alphabet from notes.");
+      }
+
+      // Generate accurate, isolated character crops directly from box2d vision coordinates
+      if (
+        data.resolvedCharacters &&
+        Array.isArray(data.resolvedCharacters) &&
+        processedResult?.cleanedCanvas &&
+        processedResult?.colorCanvas
+      ) {
+        data.resolvedCharacters = data.resolvedCharacters.map(
+          (item: any, idx: number) => {
+            if (item.box2d && Array.isArray(item.box2d) && item.box2d.length === 4) {
+              const crop = cropGlyphFromNormBox(
+                processedResult.cleanedCanvas,
+                processedResult.colorCanvas,
+                item.box2d as [number, number, number, number],
+                item.char,
+                `harvest-${idx}`
+              );
+
+              if (crop) {
+                return {
+                  ...item,
+                  glyphId: crop.id,
+                  glyphIndex: idx,
+                  croppedDataUrl: crop.canvasDataUrl,
+                  colorCroppedDataUrl: crop.colorCanvasDataUrl,
+                  _cropGlyph: crop,
+                };
+              }
+            }
+            return item;
+          }
+        );
+      }
+
+      setHarvestResult(data);
+      if (data.suggestedFontName) {
+        setFontSettings((prev) => ({
+          ...prev,
+          name: data.suggestedFontName,
+          family: data.suggestedFontName.replace(/\s+/g, ""),
+        }));
+      }
+      showToast(
+        `Singled out ${data.resolvedCharacters?.length || 0} characters from scattered notes!`
+      );
+    } catch (err: any) {
+      console.error("Alphabet Harvester Error:", err);
+      const msg =
+        err.name === "AbortError"
+          ? "Document analysis took longer than 20s. You can use standard 1-click Auto-Sequence instead!"
+          : "AI Harvesting failed: " + (err.message || "Unknown error");
+      showToast(msg);
+      setIsHarvesterModalOpen(false);
+    } finally {
+      clearTimeout(timeoutId);
+      setIsHarvestingAlphabet(false);
+    }
+  };
+
+  // Apply Curated Alphabet Resolution
+  const handleApplyHarvest = (
+    result: AlphabetHarvestResult,
+    mode: "replace" | "keep-all"
+  ) => {
+    if (!result.resolvedCharacters || result.resolvedCharacters.length === 0) {
+      return;
+    }
+
+    if (result.suggestedFontName) {
+      setFontSettings((prev) => ({
+        ...prev,
+        name: result.suggestedFontName!,
+        family: result.suggestedFontName!.replace(/\s+/g, ""),
+      }));
+    }
+
+    if (mode === "replace") {
+      // Build a map of winning glyphs for each unique character
+      const curatedGlyphs: DetectedGlyph[] = [];
+      const seenChars = new Set<string>();
+
+      for (const item of result.resolvedCharacters) {
+        if (!item.char || seenChars.has(item.char)) continue;
+        seenChars.add(item.char);
+
+        // Check if we have an isolated precision crop from box2d
+        const cropObj = (item as any)._cropGlyph as DetectedGlyph | undefined;
+        if (cropObj) {
+          // Compute vector contours for the isolated crop
+          if (processedResult?.binaryMask) {
+            try {
+              cropObj.contours = extractGlyphContours(
+                processedResult.binaryMask,
+                processedResult.width,
+                processedResult.height,
+                cropObj.bbox,
+                imageSettings.smoothing
+              );
+            } catch (e) {
+              console.warn("Contour extraction for crop error:", e);
+            }
+          }
+          curatedGlyphs.push(cropObj);
+          continue;
+        }
+
+        if (
+          item.box2d &&
+          processedResult?.cleanedCanvas &&
+          processedResult?.colorCanvas
+        ) {
+          const crop = cropGlyphFromNormBox(
+            processedResult.cleanedCanvas,
+            processedResult.colorCanvas,
+            item.box2d,
+            item.char,
+            "harvest"
+          );
+          if (crop) {
+            if (processedResult.binaryMask) {
+              try {
+                crop.contours = extractGlyphContours(
+                  processedResult.binaryMask,
+                  processedResult.width,
+                  processedResult.height,
+                  crop.bbox,
+                  imageSettings.smoothing
+                );
+              } catch (e) {}
+            }
+            curatedGlyphs.push(crop);
+            continue;
+          }
+        }
+
+        // Fallback: match from existing pre-segmented glyphs
+        const match =
+          glyphs.find((g) => g.id === item.glyphId) ||
+          (item.glyphIndex !== undefined ? glyphs[item.glyphIndex] : null);
+
+        if (match) {
+          curatedGlyphs.push({
+            ...match,
+            char: item.char,
+            unicode: item.char.charCodeAt(0),
+          });
+        }
+      }
+
+      // Sort curated glyphs logically: Uppercase A-Z -> Lowercase a-z -> Digits 0-9 -> Others
+      curatedGlyphs.sort((a, b) => {
+        const charA = a.char || "";
+        const charB = b.char || "";
+        const isUpperA = /^[A-Z]$/.test(charA);
+        const isUpperB = /^[A-Z]$/.test(charB);
+        const isLowerA = /^[a-z]$/.test(charA);
+        const isLowerB = /^[a-z]$/.test(charB);
+        const isDigitA = /^[0-9]$/.test(charA);
+        const isDigitB = /^[0-9]$/.test(charB);
+
+        const groupScore = (c: string, isU: boolean, isL: boolean, isD: boolean) => {
+          if (isU) return 1;
+          if (isL) return 2;
+          if (isD) return 3;
+          return 4;
+        };
+
+        const scoreA = groupScore(charA, isUpperA, isLowerA, isDigitA);
+        const scoreB = groupScore(charB, isUpperB, isLowerB, isDigitB);
+
+        if (scoreA !== scoreB) return scoreA - scoreB;
+        return charA.localeCompare(charB);
+      });
+
+      setGlyphs(curatedGlyphs);
+      showToast(
+        `Applied 1-Click Curated Alphabet: ${curatedGlyphs.length} distinct characters organized A-Z, a-z, 0-9!`
+      );
+    } else {
+      // Keep all, update chars for matched
+      const updateMap = new Map<string, string>();
+      for (const item of result.resolvedCharacters) {
+        if (item.glyphId) updateMap.set(item.glyphId, item.char);
+      }
+
+      setGlyphs((prev) =>
+        prev.map((g) => {
+          if (updateMap.has(g.id)) {
+            const char = updateMap.get(g.id)!;
+            return { ...g, char, unicode: char.charCodeAt(0) };
+          }
+          return g;
+        })
+      );
+      showToast(`Updated character assignments across all ${glyphs.length} glyphs.`);
+    }
+
+    // Auto-trigger dynamic font generation with new curated set
+    setTimeout(() => {
+      handleGenerateFont();
+    }, 100);
   };
 
   return (
@@ -821,7 +1101,9 @@ export default function App() {
             onAiAutoLabel={handleAiAutoLabel}
             onProceedToMetrics={() => setCurrentTab("metrics")}
             onOpenExpanderModal={() => setIsExpanderModalOpen(true)}
+            onHarvestAlphabetFromNotes={handleHarvestAlphabetFromNotes}
             isAiLabeling={isAiLabeling}
+            isHarvesting={isHarvestingAlphabet}
           />
         )}
 
@@ -871,6 +1153,25 @@ export default function App() {
         fileName={processingState.fileName}
         currentStepIndex={processingState.currentStepIndex}
         detectedCount={processingState.detectedCount}
+      />
+
+      {/* One-Click Alphabet Harvester Modal for Scattered Notes */}
+      <AlphabetHarvesterModal
+        isOpen={isHarvesterModalOpen}
+        onClose={() => setIsHarvesterModalOpen(false)}
+        glyphs={glyphs}
+        sourceImageUrl={sourceImageUrl}
+        harvestResult={harvestResult}
+        isLoading={isHarvestingAlphabet}
+        onApplyHarvest={handleApplyHarvest}
+        onOpenExpanderModal={() => setIsExpanderModalOpen(true)}
+        onUpdateFontName={(newName) =>
+          setFontSettings((prev) => ({
+            ...prev,
+            name: newName,
+            family: newName.replace(/\s+/g, ""),
+          }))
+        }
       />
 
       {/* Character Extrapolation & Font Expansion Modal */}

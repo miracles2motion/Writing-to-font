@@ -62,3 +62,26 @@ export interface FontSettings {
 }
 
 export type StudioTab = "upload" | "glyphs" | "metrics" | "test" | "export";
+
+export interface ResolvedHarvestCharacter {
+  char: string;
+  casing: "upper" | "lower" | "digit" | "symbol";
+  glyphIndex?: number;
+  glyphId?: string;
+  box2d?: [number, number, number, number]; // [ymin, xmin, ymax, xmax] in 0-1000 normalized coordinates
+  croppedDataUrl?: string;
+  colorCroppedDataUrl?: string;
+  qualityScore: number;
+  sourceWord?: string;
+  notes?: string;
+}
+
+export interface AlphabetHarvestResult {
+  resolvedCharacters: ResolvedHarvestCharacter[];
+  missingStandardCharacters: string[];
+  totalFoundCount: number;
+  handwritingStyle?: string;
+  suggestedFontName?: string;
+  summary: string;
+  _modelUsed?: string;
+}

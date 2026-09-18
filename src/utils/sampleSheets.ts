@@ -150,3 +150,128 @@ export function generateSampleSheet(presetId: string): string {
 
   return canvas.toDataURL("image/png");
 }
+
+/**
+ * Generates a clean, high-resolution printable PDF/PNG template with light guide boxes
+ * labeled with A-Z, a-z, and 0-9 for users to print, write, and scan/photograph.
+ */
+export function generatePrintableTemplateSheet(): string {
+  const canvas = document.createElement("canvas");
+  canvas.width = 2480; // High-res A4 / 300 DPI equivalent width
+  canvas.height = 3508; // High-res A4 height
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return "";
+
+  // 1. Crisp white paper background
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // 2. Header and instructions
+  ctx.fillStyle = "#0f172a";
+  ctx.font = "bold 56px sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText("IMAGE TO FONT STUDIO — HANDWRITING TEMPLATE SHEET", 120, 160);
+
+  ctx.fillStyle = "#64748b";
+  ctx.font = "normal 32px sans-serif";
+  ctx.fillText(
+    "Write one character clearly inside each box with a black or dark pen/marker. Keep strokes inside the dotted box.",
+    120,
+    220
+  );
+
+  // Outer border
+  ctx.strokeStyle = "#cbd5e1";
+  ctx.lineWidth = 4;
+  ctx.strokeRect(100, 280, canvas.width - 200, canvas.height - 380);
+
+  const sections = [
+    {
+      title: "UPPERCASE LETTERS (A – Z)",
+      rows: [
+        ["A", "B", "C", "D", "E", "F", "G"],
+        ["H", "I", "J", "K", "L", "M", "N"],
+        ["O", "P", "Q", "R", "S", "T", "U"],
+        ["V", "W", "X", "Y", "Z", "", ""],
+      ],
+      startY: 360,
+    },
+    {
+      title: "LOWERCASE LETTERS (a – z)",
+      rows: [
+        ["a", "b", "c", "d", "e", "f", "g"],
+        ["h", "i", "j", "k", "l", "m", "n"],
+        ["o", "p", "q", "r", "s", "t", "u"],
+        ["v", "w", "x", "y", "z", "", ""],
+      ],
+      startY: 1400,
+    },
+    {
+      title: "NUMBERS & ESSENTIAL SYMBOLS (0 – 9, ! ? . , -)",
+      rows: [
+        ["0", "1", "2", "3", "4", "5", "6"],
+        ["7", "8", "9", "!", "?", ".", ","],
+      ],
+      startY: 2440,
+    },
+  ];
+
+  const cellWidth = 300;
+  const cellHeight = 210;
+  const gapX = 18;
+  const gapY = 18;
+  const marginX = 140;
+
+  sections.forEach((section) => {
+    // Section Header
+    ctx.fillStyle = "#1e293b";
+    ctx.font = "bold 34px sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(section.title, marginX, section.startY);
+
+    section.rows.forEach((row, rIdx) => {
+      const rowY = section.startY + 40 + rIdx * (cellHeight + gapY);
+
+      row.forEach((charLabel, cIdx) => {
+        if (!charLabel) return; // empty filler box
+
+        const cellX = marginX + cIdx * (cellWidth + gapX);
+
+        // Draw light grey dotted/solid guide box
+        ctx.strokeStyle = "#e2e8f0";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(cellX, rowY, cellWidth, cellHeight);
+
+        // Baseline guideline (subtle dashed line)
+        ctx.save();
+        ctx.strokeStyle = "#f1f5f9";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([8, 8]);
+        ctx.beginPath();
+        ctx.moveTo(cellX + 15, rowY + cellHeight - 50);
+        ctx.lineTo(cellX + cellWidth - 15, rowY + cellHeight - 50);
+        ctx.stroke();
+        ctx.restore();
+
+        // Small faint reference label in top-left corner
+        ctx.fillStyle = "#94a3b8";
+        ctx.font = "bold 26px sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillText(charLabel, cellX + 16, rowY + 36);
+      });
+    });
+  });
+
+  // Footer branding
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "normal 28px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(
+    "Tip: After writing, take a well-lit flat photo or scan and upload to Image to Font Studio.",
+    canvas.width / 2,
+    canvas.height - 40
+  );
+
+  return canvas.toDataURL("image/png");
+}
+

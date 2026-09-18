@@ -212,15 +212,16 @@ export function buildFontFromGlyphs(
   }
 
   // Construct Font Object
-  const familyName = (settings.family || settings.name || "CustomFont").trim();
+  const rawFamily = (settings.family || settings.name || "CustomFont").trim();
+  const safeFamily = rawFamily.replace(/[^a-zA-Z0-9_\-\s]/g, "") || "CustomFont";
   const styleName = settings.styleName || "Regular";
 
   const font = new opentype.Font({
-    familyName,
+    familyName: safeFamily,
     styleName,
-    unitsPerEm: settings.unitsPerEm || 1000,
-    ascender: settings.ascender || 800,
-    descender: settings.descender || -200,
+    unitsPerEm: Math.max(64, Math.min(16384, settings.unitsPerEm || 1000)),
+    ascender: Math.max(100, settings.ascender || 800),
+    descender: Math.min(-10, settings.descender || -200),
     glyphs: fontGlyphs,
   });
 
@@ -244,12 +245,28 @@ export async function applyDynamicFontFace(
   fontFamilyName: string,
   arrayBuffer: ArrayBuffer
 ): Promise<void> {
+  if (!arrayBuffer || arrayBuffer.byteLength < 100) {
+    console.warn("ArrayBuffer too small or empty for dynamic FontFace");
+    return;
+  }
+
+  const safeFamilyName = fontFamilyName.trim().replace(/['"]/g, "");
+
   try {
-    const fontFace = new FontFace(fontFamilyName, arrayBuffer);
+    const fontFace = new FontFace(safeFamilyName, arrayBuffer);
     const loadedFace = await fontFace.load();
+
+    // Clear any previous loaded faces for this family name to prevent conflicts
+    document.fonts.forEach((face) => {
+      if (face.family === safeFamilyName || face.family === `"${safeFamilyName}"`) {
+        document.fonts.delete(face);
+      }
+    });
+
     document.fonts.add(loadedFace);
   } catch (err) {
-    console.error("Failed to register dynamic FontFace:", err);
+    // If FontFace buffer parsing encounters edge cases, fail gracefully
+    console.warn("Dynamic FontFace registration fallback:", err);
   }
 }
 

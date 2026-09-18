@@ -19,7 +19,7 @@ import {
   createGlyphFromSvgPath,
   getAlgorithmicSvgForChar,
 } from "../utils/glyphExpander";
-import { getAiRequestHeaders } from "../utils/aiClient";
+import { getAiRequestHeaders, checkHasActiveAiKey } from "../utils/aiClient";
 
 interface CharacterExpanderModalProps {
   isOpen: boolean;
@@ -100,7 +100,16 @@ export const CharacterExpanderModal: React.FC<CharacterExpanderModalProps> = ({
 
       const generatedGlyphs: DetectedGlyph[] = [];
 
-      if (engine === "ai") {
+      let activeEngine = engine;
+      if (activeEngine === "ai") {
+        const hasKey = await checkHasActiveAiKey();
+        if (!hasKey) {
+          showToast?.("No Gemini API key configured. Using instant algorithmic geometric expansion!");
+          activeEngine = "algorithmic";
+        }
+      }
+
+      if (activeEngine === "ai") {
         setProgressMsg("Sending style reference to Gemini typography engine...");
         setProgressPercent(30);
 
@@ -121,10 +130,14 @@ export const CharacterExpanderModal: React.FC<CharacterExpanderModalProps> = ({
           );
           setProgressPercent(35 + Math.round(((bIndex + 0.5) / batches.length) * 50));
 
+          const batchController = new AbortController();
+          const batchTimeout = setTimeout(() => batchController.abort(), 18000);
+
           try {
             const resp = await fetch("/api/ai/expand-glyphs", {
               method: "POST",
               headers: getAiRequestHeaders(),
+              signal: batchController.signal,
               body: JSON.stringify({
                 referenceImageBase64: sourceImageUrl,
                 existingCharacters: Array.from(existingChars),
@@ -132,6 +145,7 @@ export const CharacterExpanderModal: React.FC<CharacterExpanderModalProps> = ({
                 fontStyle,
               }),
             });
+            clearTimeout(batchTimeout);
 
             if (!resp.ok) {
               const errData = await resp.json().catch(() => ({}));

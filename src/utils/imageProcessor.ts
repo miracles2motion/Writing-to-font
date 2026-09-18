@@ -23,7 +23,7 @@ export function evaluateSheetQuality(
   const totalPixels = width * height;
   let inkPixels = 0;
   let edgeInkPixels = 0;
-  const edgeMargin = Math.max(2, Math.min(8, Math.floor(Math.min(width, height) * 0.015)));
+  const edgeMargin = Math.max(1, Math.min(4, Math.floor(Math.min(width, height) * 0.008)));
 
   for (let y = 0; y < height; y++) {
     const isTopOrBottom = y < edgeMargin || y >= height - edgeMargin;
@@ -46,44 +46,36 @@ export function evaluateSheetQuality(
   const warnings: string[] = [];
   let isLikelyPhoto = false;
 
-  // Real character sheets typically have 2% - 30% ink coverage (vast majority is white/light paper background)
-  // Photos of people, landscapes, or solid graphics typically have > 40% ink coverage
-  if (inkCoverageRatio > 0.45) {
+  // Real character sheets range from light handwriting (~3% ink) to heavy bold decorative cultural alphabets (~65% ink)
+  // Only classify as photo if ink coverage is practically 100% full bleed (>92%) with heavy edge touching across all borders
+  if (inkCoverageRatio > 0.92 && edgeTouchingInkRatio > 0.65) {
     isLikelyPhoto = true;
     warnings.push(
-      `High foreground density (${Math.round(inkCoverageRatio * 100)}% non-white area). Character sheets should be mostly clean light paper.`
+      `Solid full-bleed coverage (${Math.round(inkCoverageRatio * 100)}% non-white area with edge contact). Font sheets require light background margins between characters.`
     );
-  } else if (inkCoverageRatio < 0.005) {
-    warnings.push("Very faint or virtually blank image. Almost no ink strokes detected.");
+  } else if (inkCoverageRatio < 0.003) {
+    warnings.push("Very faint or blank sheet. Almost no character strokes detected.");
   }
 
-  // Edge bleeding: Character sheets almost always have clean white margins around the edges
-  // Photos typically bleed all the way to the 4 edges of the image
-  if (edgeTouchingInkRatio > 0.25) {
+  // Fragment count: Natural photos/scenes without white backgrounds binarize into hundreds of micro-blobs (>350)
+  // Full alphabet sheets with A-Z, a-z, 0-9, symbols, accents can easily have 80-140 distinct characters
+  if (glyphCount > 350) {
     isLikelyPhoto = true;
     warnings.push(
-      `Dark areas bleed across ${Math.round(edgeTouchingInkRatio * 100)}% of the outer image borders, characteristic of a scene or photograph.`
-    );
-  }
-
-  // Fragment count: Natural photos binarize into hundreds of micro-blobs
-  if (glyphCount > 150) {
-    isLikelyPhoto = true;
-    warnings.push(
-      `Extracted an unusually high count of fragments (${glyphCount}). Real font sheets typically contain 26 to 100 characters.`
+      `Extracted an unusually high count of micro-fragments (${glyphCount}). Real font sheets typically contain 20 to 120 characters.`
     );
   } else if (glyphCount === 0) {
     warnings.push("No distinct character regions detected.");
   }
 
-  const isValidSheet = !isLikelyPhoto && glyphCount >= 1 && glyphCount <= 120 && inkCoverageRatio <= 0.40;
+  const isValidSheet = !isLikelyPhoto && glyphCount >= 1;
 
-  let recommendation = "Good character sheet format detected. Clean background and clear isolated glyphs.";
+  let recommendation = "Clean character sheet format detected. Characters successfully isolated with transparent background.";
   if (isLikelyPhoto) {
     recommendation =
-      "This image appears to be a photo or complex scene rather than a character sheet. For best font creation results, please upload a drawn or printed alphabet/number grid on a plain white or light background.";
+      "This image appears to be a full-bleed photo or complex scene. For best font creation results, upload an alphabet sheet on a plain white or light background.";
   } else if (warnings.length > 0) {
-    recommendation = "Some background noise or marginal elements detected. You can adjust the White Cutoff Threshold on the left to refine.";
+    recommendation = "You can adjust the White Cutoff Threshold on the left to refine letter borders.";
   }
 
   return {
@@ -107,8 +99,20 @@ export function removeBackgroundAndBinarize(
   sourceImage: HTMLImageElement | HTMLCanvasElement,
   settings: ImageProcessingSettings
 ): ProcessedImageResult {
-  const width = sourceImage.width;
-  const height = sourceImage.height;
+  // Safe maximum dimension limit to prevent browser tab crashing on 12MP+ photos
+  const MAX_DIM = 1920;
+  let width = sourceImage.width;
+  let height = sourceImage.height;
+
+  if (width > MAX_DIM || height > MAX_DIM) {
+    if (width >= height) {
+      height = Math.round((height * MAX_DIM) / width);
+      width = MAX_DIM;
+    } else {
+      width = Math.round((width * MAX_DIM) / height);
+      height = MAX_DIM;
+    }
+  }
 
   // Canvas 1: Cleaned monochrome canvas for vector contour tracing
   const monoCanvas = document.createElement("canvas");
@@ -124,8 +128,8 @@ export function removeBackgroundAndBinarize(
   const colorCtx = colorCanvas.getContext("2d", { willReadFrequently: true });
   if (!colorCtx) throw new Error("Could not create color canvas context");
 
-  monoCtx.drawImage(sourceImage, 0, 0);
-  colorCtx.drawImage(sourceImage, 0, 0);
+  monoCtx.drawImage(sourceImage, 0, 0, width, height);
+  colorCtx.drawImage(sourceImage, 0, 0, width, height);
 
   const monoImgData = monoCtx.getImageData(0, 0, width, height);
   const monoData = monoImgData.data;
@@ -262,7 +266,12 @@ export function segmentGlyphs(
             // Discard blobs that touch the absolute perimeter if they span wide/tall (edge photographic borders/shadows)
             const touchesBorder = minX <= 1 || minY <= 1 || maxX >= width - 2 || maxY >= height - 2;
             const isBorderClutter = touchesBorder && (bWidth > width * 0.35 || bHeight > height * 0.35);
-            if (!isBorderClutter) {
+
+            // Discard horizontal notebook ruled lines or underlines (extreme aspect ratio)
+            const isHorizontalRule = bWidth > 60 && bWidth / Math.max(1, bHeight) > 9;
+            const isVerticalMargin = bHeight > 80 && bHeight / Math.max(1, bWidth) > 10;
+
+            if (!isBorderClutter && !isHorizontalRule && !isVerticalMargin) {
               rawBoxes.push({
                 x: minX,
                 y: minY,
@@ -276,6 +285,15 @@ export function segmentGlyphs(
     }
   }
 
+  // Safety guard against complex photos / noise texture flooding
+  let candidateBoxes = rawBoxes;
+  if (candidateBoxes.length > 400) {
+    // Keep the 350 most substantial components by area
+    candidateBoxes = candidateBoxes
+      .sort((a, b) => b.width * b.height - a.width * a.height)
+      .slice(0, 350);
+  }
+
   // Multi-part character grouping: STRICTLY for vertical accents & dots (e.g. dots of i/j, colon, semicolon, !, ?, =)
   // NEVER merge horizontally adjacent characters into each other!
   const mergedBoxes: BoundingBox[] = [];
@@ -283,17 +301,19 @@ export function segmentGlyphs(
 
   const maxGap = settings.mergeDistance;
 
-  for (let i = 0; i < rawBoxes.length; i++) {
+  for (let i = 0; i < candidateBoxes.length; i++) {
     if (used.has(i)) continue;
-    let b = { ...rawBoxes[i] };
+    let b = { ...candidateBoxes[i] };
     used.add(i);
 
     let changed = true;
-    while (changed) {
+    let iterations = 0;
+    while (changed && iterations < 3) {
       changed = false;
-      for (let j = 0; j < rawBoxes.length; j++) {
+      iterations++;
+      for (let j = 0; j < candidateBoxes.length; j++) {
         if (used.has(j)) continue;
-        const o = rawBoxes[j];
+        const o = candidateBoxes[j];
 
         // Horizontal overlap (must have true positive overlap, never negative)
         const xOverlap = Math.min(b.x + b.width, o.x + o.width) - Math.max(b.x, o.x);
@@ -456,3 +476,115 @@ export function segmentGlyphs(
     };
   });
 }
+
+/**
+ * Accurately extracts a single isolated character glyph from normalized [ymin, xmin, ymax, xmax] coordinates (0-1000)
+ */
+export function cropGlyphFromNormBox(
+  cleanedCanvas: HTMLCanvasElement,
+  colorCanvas: HTMLCanvasElement,
+  box2d: [number, number, number, number],
+  char: string,
+  idPrefix: string = "harvest"
+): DetectedGlyph | null {
+  const [ymin, xmin, ymax, xmax] = box2d;
+  const imgW = cleanedCanvas.width;
+  const imgH = cleanedCanvas.height;
+
+  // Convert 0-1000 normalized coordinates to pixel coordinates
+  let pxMinX = Math.floor((xmin / 1000) * imgW);
+  let pxMaxX = Math.ceil((xmax / 1000) * imgW);
+  let pxMinY = Math.floor((ymin / 1000) * imgH);
+  let pxMaxY = Math.ceil((ymax / 1000) * imgH);
+
+  // Add a slight margin to avoid clipping descenders or ascenders
+  const marginX = Math.max(3, Math.round((pxMaxX - pxMinX) * 0.08));
+  const marginY = Math.max(3, Math.round((pxMaxY - pxMinY) * 0.08));
+
+  pxMinX = Math.max(0, pxMinX - marginX);
+  pxMinY = Math.max(0, pxMinY - marginY);
+  pxMaxX = Math.min(imgW - 1, pxMaxX + marginX);
+  pxMaxY = Math.min(imgH - 1, pxMaxY + marginY);
+
+  const rawW = pxMaxX - pxMinX + 1;
+  const rawH = pxMaxY - pxMinY + 1;
+
+  if (rawW < 2 || rawH < 2) return null;
+
+  // Inspect the pixels in cleanedCanvas to get a tight bounding box around actual ink
+  const ctx = cleanedCanvas.getContext("2d");
+  if (!ctx) return null;
+
+  const cropImgData = ctx.getImageData(pxMinX, pxMinY, rawW, rawH);
+  const data = cropImgData.data;
+
+  let tightMinX = rawW;
+  let tightMaxX = -1;
+  let tightMinY = rawH;
+  let tightMaxY = -1;
+  let inkCount = 0;
+
+  for (let y = 0; y < rawH; y++) {
+    for (let x = 0; x < rawW; x++) {
+      const idx = (y * rawW + x) * 4;
+      const alpha = data[idx + 3];
+      if (alpha > 40) {
+        inkCount++;
+        if (x < tightMinX) tightMinX = x;
+        if (x > tightMaxX) tightMaxX = x;
+        if (y < tightMinY) tightMinY = y;
+        if (y > tightMaxY) tightMaxY = y;
+      }
+    }
+  }
+
+  // If ink found, tighten coordinates
+  let finalX = pxMinX;
+  let finalY = pxMinY;
+  let finalW = rawW;
+  let finalH = rawH;
+
+  if (inkCount > 8 && tightMaxX >= tightMinX && tightMaxY >= tightMinY) {
+    finalX = pxMinX + tightMinX;
+    finalY = pxMinY + tightMinY;
+    finalW = tightMaxX - tightMinX + 1;
+    finalH = tightMaxY - tightMinY + 1;
+  }
+
+  const pad = 6;
+  const monoCanvas = document.createElement("canvas");
+  monoCanvas.width = finalW + pad * 2;
+  monoCanvas.height = finalH + pad * 2;
+  const mCtx = monoCanvas.getContext("2d");
+  if (mCtx) {
+    mCtx.drawImage(cleanedCanvas, finalX, finalY, finalW, finalH, pad, pad, finalW, finalH);
+  }
+
+  const colCanvas = document.createElement("canvas");
+  colCanvas.width = finalW + pad * 2;
+  colCanvas.height = finalH + pad * 2;
+  const cCtx = colCanvas.getContext("2d");
+  if (cCtx) {
+    cCtx.drawImage(colorCanvas, finalX, finalY, finalW, finalH, pad, pad, finalW, finalH);
+  }
+
+  const bbox: BoundingBox = {
+    x: finalX,
+    y: finalY,
+    width: finalW,
+    height: finalH,
+  };
+
+  return {
+    id: `${idPrefix}-${char}-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+    char,
+    unicode: char.charCodeAt(0),
+    bbox,
+    canvasDataUrl: monoCanvas.toDataURL("image/png"),
+    colorCanvasDataUrl: colCanvas.toDataURL("image/png"),
+    advanceWidth: Math.round(finalW * 1.25),
+    leftBearing: 20,
+    rightBearing: 20,
+  };
+}
+

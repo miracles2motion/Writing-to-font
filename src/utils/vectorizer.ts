@@ -221,11 +221,17 @@ export function contoursToSvgPath(contours: Point[][]): string {
 
   for (const contour of contours) {
     if (contour.length < 3) continue;
-    d += ` M ${contour[0].x.toFixed(1)} ${contour[0].y.toFixed(1)}`;
+    const n = contour.length;
+    const pLast = contour[n - 1];
+    const pFirst = contour[0];
+    const startX = (pLast.x + pFirst.x) / 2;
+    const startY = (pLast.y + pFirst.y) / 2;
 
-    for (let i = 1; i < contour.length; i++) {
+    d += ` M ${startX.toFixed(1)} ${startY.toFixed(1)}`;
+
+    for (let i = 0; i < n; i++) {
       const curr = contour[i];
-      const next = contour[(i + 1) % contour.length];
+      const next = contour[(i + 1) % n];
       const midX = (curr.x + next.x) / 2;
       const midY = (curr.y + next.y) / 2;
       d += ` Q ${curr.x.toFixed(1)} ${curr.y.toFixed(1)} ${midX.toFixed(1)} ${midY.toFixed(1)}`;
@@ -252,12 +258,11 @@ export function buildOpenTypeGlyphPath(
     // Return empty path with default advance
     return {
       path,
-      advanceWidth: fontSettings.spaceWidth || 320,
+      advanceWidth: Math.max(100, fontSettings.spaceWidth || 320),
     };
   }
 
   // Calculate target scale and baseline
-  // Normal capital letters fit into capHeight (e.g. 700 units)
   const isLower = glyph.char >= "a" && glyph.char <= "z";
   const targetEmHeight = isLower
     ? fontSettings.xHeight || 500
@@ -266,23 +271,30 @@ export function buildOpenTypeGlyphPath(
   const glyphH = Math.max(1, bbox.height);
   const scale = targetEmHeight / glyphH;
 
-  const leftBearing = glyph.leftBearing ?? Math.round(fontSettings.letterSpacing * 0.5);
-  const rightBearing = glyph.rightBearing ?? Math.round(fontSettings.letterSpacing * 0.5);
-  const calculatedAdvance = Math.round(bbox.width * scale + leftBearing + rightBearing);
+  const leftBearing = Math.max(0, glyph.leftBearing ?? Math.round(fontSettings.letterSpacing * 0.5));
+  const rightBearing = Math.max(0, glyph.rightBearing ?? Math.round(fontSettings.letterSpacing * 0.5));
+  const calculatedAdvance = Math.max(
+    100,
+    Math.round(bbox.width * scale + leftBearing + rightBearing)
+  );
 
   // In OpenType / TrueType, Y = 0 is baseline, Y > 0 is upwards towards ascender
-  // In image coordinates, Y = 0 is top of bbox, Y = bbox.height is bottom
   for (const contour of contours) {
-    if (contour.length < 3) continue;
+    if (!contour || contour.length < 3) continue;
 
-    // First point
-    const startX = Math.round(leftBearing + contour[0].x * scale);
-    const startY = Math.round((bbox.height - contour[0].y) * scale);
+    const n = contour.length;
+    const pLast = contour[n - 1];
+    const pFirst = contour[0];
+
+    const startX = Math.round(leftBearing + ((pLast.x + pFirst.x) / 2) * scale);
+    const startY = Math.round((bbox.height - (pLast.y + pFirst.y) / 2) * scale);
+
+    if (!Number.isFinite(startX) || !Number.isFinite(startY)) continue;
     path.moveTo(startX, startY);
 
-    for (let i = 1; i < contour.length; i++) {
+    for (let i = 0; i < n; i++) {
       const curr = contour[i];
-      const next = contour[(i + 1) % contour.length];
+      const next = contour[(i + 1) % n];
 
       const cx = Math.round(leftBearing + curr.x * scale);
       const cy = Math.round((bbox.height - curr.y) * scale);
@@ -290,7 +302,14 @@ export function buildOpenTypeGlyphPath(
       const mx = Math.round(leftBearing + ((curr.x + next.x) / 2) * scale);
       const my = Math.round((bbox.height - (curr.y + next.y) / 2) * scale);
 
-      path.quadraticCurveTo(cx, cy, mx, my);
+      if (
+        Number.isFinite(cx) &&
+        Number.isFinite(cy) &&
+        Number.isFinite(mx) &&
+        Number.isFinite(my)
+      ) {
+        path.quadraticCurveTo(cx, cy, mx, my);
+      }
     }
 
     path.close();

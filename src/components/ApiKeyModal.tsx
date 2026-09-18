@@ -29,22 +29,22 @@ export interface AvailableModel {
 
 export const SUPPORTED_MODELS: AvailableModel[] = [
   {
-    id: "gemini-3.8-flash",
-    name: "Gemini 3.8 Flash (Default)",
+    id: "gemini-2.5-flash",
+    name: "Gemini 2.5 Flash (Default)",
     description: "Ultra-fast vision & OCR intelligence. Highest quota and lowest latency for glyph segmentation.",
     badge: "Fastest & Recommended",
     recommendedFor: "Glyph detection, auto-casing, handwriting OCR",
   },
   {
-    id: "gemini-3.1-pro-preview",
-    name: "Gemini 3.1 Pro Preview",
+    id: "gemini-2.5-pro",
+    name: "Gemini 2.5 Pro",
     description: "Deep typographic reasoning & aesthetic synthesis for nuanced font advice & vector extrapolation.",
     badge: "Highest Intelligence",
     recommendedFor: "Complex decorative fonts, vector synthesis",
   },
   {
-    id: "gemini-3.1-flash-lite",
-    name: "Gemini 3.1 Flash Lite",
+    id: "gemini-2.0-flash",
+    name: "Gemini 2.0 Flash",
     description: "Lightweight fallback model for maximum throughput and resilience.",
     badge: "High Throughput",
     recommendedFor: "Rapid single-glyph classification",

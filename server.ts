@@ -73,21 +73,21 @@ function extractModelFromReq(req: express.Request): string {
   if (req.body && typeof req.body.preferredModel === "string" && req.body.preferredModel.trim()) {
     return req.body.preferredModel.trim();
   }
-  return "gemini-3.8-flash";
+  return "gemini-2.5-flash";
 }
 
 /**
- * Executes a Gemini request with automatic multi-model failover.
- * If the primary requested model fails (e.g. rate limit 429, temporary 503, or quota),
- * it seamlessly cascades down standby models.
+ * Executes a Gemini request with automatic multi-model failover and hard timeout.
+ * Prevents requests from stalling or taking forever.
  */
 async function generateContentWithFailover(
   ai: GoogleGenAI,
   requestedModel: string,
-  params: { contents: any; config?: any }
+  params: { contents: any; config?: any },
+  timeoutMs: number = 22000
 ): Promise<{ response: any; modelUsed: string }> {
   // Build fallback model chain starting with the user's requested model
-  const fallbackCandidates = ["gemini-3.8-flash", "gemini-3.1-pro-preview", "gemini-3.1-flash-lite"];
+  const fallbackCandidates = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"];
   const modelChain: string[] = [requestedModel];
   for (const m of fallbackCandidates) {
     if (!modelChain.includes(m)) {
@@ -98,11 +98,17 @@ async function generateContentWithFailover(
   let lastError: any = null;
   for (const modelToTry of modelChain) {
     try {
-      const response = await ai.models.generateContent({
+      const generatePromise = ai.models.generateContent({
         model: modelToTry,
         contents: params.contents,
         config: params.config,
       });
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`Model ${modelToTry} timed out after ${Math.round(timeoutMs / 1000)}s`)), timeoutMs)
+      );
+
+      const response: any = await Promise.race([generatePromise, timeoutPromise]);
       return { response, modelUsed: modelToTry };
     } catch (err: any) {
       console.warn(`[Gemini Failover] Model '${modelToTry}' failed. Checking next standby model in chain...`, err?.message || err);
@@ -117,6 +123,18 @@ async function generateContentWithFailover(
 // Health check
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", aiConfigured: Boolean(process.env.GEMINI_API_KEY) });
+});
+
+// AI Configuration Status
+app.get("/api/ai/status", (req, res) => {
+  const customApiKey = extractApiKeyFromReq(req);
+  const activeKey = customApiKey || process.env.GEMINI_API_KEY;
+  res.json({
+    hasKey: Boolean(activeKey),
+    isCustomKey: Boolean(customApiKey),
+    hasServerKey: Boolean(process.env.GEMINI_API_KEY),
+    defaultModel: "gemini-2.5-flash",
+  });
 });
 
 // AI Recognition of Glyph Sheet
@@ -281,6 +299,136 @@ Identify what exact character this is, paying crucial attention to CASING (upper
   } catch (err: any) {
     console.error("Error classifying glyph:", err);
     return res.status(500).json({ error: err.message || "Failed to classify glyph." });
+  }
+});
+
+// AI One-Click Alphabet Harvester & Resolver for Scattered Notes
+app.post("/api/ai/harvest-alphabet-from-notes", async (req, res) => {
+  try {
+    const { imageBase64, mimeType = "image/png" } = req.body;
+
+    if (!imageBase64) {
+      return res.status(400).json({ error: "Missing imageBase64 document data" });
+    }
+
+    const customApiKey = extractApiKeyFromReq(req);
+    const preferredModel = extractModelFromReq(req);
+    const ai = getAI(customApiKey);
+    if (!ai) {
+      return res.status(503).json({
+        error: "No Gemini API key available. Please configure your key in Settings or environment.",
+      });
+    }
+
+    const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+
+    const prompt = `You are a world-leading paleographer, forensic document analyst, and master font engineer.
+You are inspecting a handwritten document (e.g. notes, lined notebook paper, brainstorming diagram, letter, or manuscript).
+
+YOUR MISSION: PRECISE SINGLE-CHARACTER HARVESTING & COMPLETE ALPHABET RESOLUTION.
+
+CRITICAL PRECISION REQUIREMENTS:
+1. ACCURATE CHARACTER LOCALIZATION (box2d):
+   - You must inspect the actual handwritten text on this page.
+   - For every unique character that actually appears written on this page:
+     - UPPERCASE LETTERS: A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z
+     - LOWERCASE LETTERS: a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z
+     - DIGITS: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+     - PUNCTUATION / SYMBOLS: ?, !, ., ,, -, :, ;, ', ", (, ), @, &, +, =
+   - Provide the EXACT tight bounding box [ymin, xmin, ymax, xmax] (normalized from 0 to 1000) enclosing ONLY that single individual letter.
+   - DO NOT encompass multi-letter clusters (like "AKE", "HO", "MAN", "COM") or full words.
+   - DO NOT encompass ruled notebook lines, underlines, or margins.
+   - The bounding box must tightly wrap the exact letter stroke on the image.
+
+2. TRUE DEDUPLICATION & BEST EXEMPLAR SELECTION:
+   - When a letter appears multiple times in the text (e.g. 'E' appears in 'STAKEHOLDER' and 'MANAGEMENT'):
+     - Choose the SINGLE cleanest, most legible, best-formed instance.
+     - Specify the source word and why it was chosen.
+
+3. STRICT HONESTY ON MISSING CHARACTERS:
+   - NEVER fake or hallucinate a letter! If the letter 'B', 'F', 'Q', 'X', or 'Z' does NOT appear in the written document, DO NOT assign a random stroke to it.
+   - Put all standard English letters (A-Z, a-z, 0-9) that are truly NOT present in the page into the "missingStandardCharacters" list.
+
+4. FONT CLASSIFICATION & EVOCATIVE NAME:
+   - Analyze the handwriting aesthetic (e.g. "Architectural Sans Caps", "Modern Executive Cursive", "Artisan Quick Jotted Script").
+   - Suggest a font name matching the content/style (e.g. "Stakeholder Sans", "Lecture Script", "Quick Thought").
+
+Return strictly JSON conforming to the schema.`;
+
+    const { response, modelUsed } = await generateContentWithFailover(ai, preferredModel, {
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              data: cleanBase64,
+              mimeType,
+            },
+          },
+          {
+            text: prompt,
+          },
+        ],
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            resolvedCharacters: {
+              type: Type.ARRAY,
+              description: "Array of unique curated characters extracted with exact 2D bounding boxes",
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  char: { type: Type.STRING, description: "The single exact character (e.g. 'A', 'a', '7', '?')" },
+                  casing: { type: Type.STRING, description: "'upper', 'lower', 'digit', or 'symbol'" },
+                  box2d: {
+                    type: Type.ARRAY,
+                    items: { type: Type.INTEGER },
+                    description: "[ymin, xmin, ymax, xmax] in 0-1000 scale enclosing ONLY this single character",
+                  },
+                  qualityScore: { type: Type.NUMBER, description: "0.0 to 1.0 visual quality and legibility score" },
+                  sourceWord: { type: Type.STRING, description: "Word or phrase where this letter occurred (e.g. 'STAKEHOLDER')" },
+                  notes: { type: Type.STRING, description: "Why this exemplar was chosen" },
+                },
+                required: ["char", "casing", "box2d"],
+              },
+            },
+            missingStandardCharacters: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: "Standard characters (from A-Z, a-z, 0-9) truly not written on the page",
+            },
+            totalFoundCount: {
+              type: Type.INTEGER,
+              description: "Total unique characters resolved",
+            },
+            handwritingStyle: {
+              type: Type.STRING,
+              description: "Artistic classification of the handwriting",
+            },
+            suggestedFontName: {
+              type: Type.STRING,
+              description: "Evocative name suggested for the font",
+            },
+            summary: {
+              type: Type.STRING,
+              description: "1-2 sentence overview of the harvest results",
+            },
+          },
+          required: ["resolvedCharacters", "missingStandardCharacters", "totalFoundCount", "summary"],
+        },
+      },
+    });
+
+    const parsed = JSON.parse(response.text || "{}");
+    parsed._modelUsed = modelUsed;
+    return res.json(parsed);
+  } catch (error: any) {
+    console.error("Error harvesting alphabet from notes:", error);
+    return res.status(500).json({
+      error: error.message || "Failed to harvest alphabet from notes.",
+    });
   }
 });
 

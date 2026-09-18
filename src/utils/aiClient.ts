@@ -23,3 +23,19 @@ export function getAiRequestHeaders(extraHeaders?: Record<string, string>): Reco
 
   return headers;
 }
+
+/**
+ * Checks whether an active Gemini API key is configured (either client custom key or server environment key).
+ */
+export async function checkHasActiveAiKey(): Promise<boolean> {
+  const customKey = getCustomApiKey();
+  if (customKey && customKey.trim()) return true;
+  try {
+    const res = await fetch("/api/ai/status");
+    if (res.ok) {
+      const data = await res.json();
+      return Boolean(data.hasKey);
+    }
+  } catch {}
+  return false;
+}

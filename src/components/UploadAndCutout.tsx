@@ -11,9 +11,15 @@ import {
   ArrowRight,
   AlertTriangle,
   Info,
+  Download,
+  FileText,
+  Bot,
+  PenTool,
+  Copy,
+  Check,
 } from "lucide-react";
 import { ImageProcessingSettings, SheetQualityAssessment } from "../types";
-import { SAMPLE_PRESETS } from "../utils/sampleSheets";
+import { SAMPLE_PRESETS, generatePrintableTemplateSheet } from "../utils/sampleSheets";
 
 interface UploadAndCutoutProps {
   sourceImageUrl: string | null;
@@ -75,6 +81,25 @@ export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
     }
   };
 
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
+
+  const handleDownloadTemplate = () => {
+    const dataUrl = generatePrintableTemplateSheet();
+    if (!dataUrl) return;
+    const link = document.createElement("a");
+    link.href = dataUrl;
+    link.download = "handwriting-alphabet-template-sheet.png";
+    link.click();
+  };
+
+  const handleCopyAiPrompt = () => {
+    const prompt =
+      "A clean typography character sheet of alphabet A to Z uppercase, lowercase a to z, and numbers 0 to 9, neatly arranged in spaced grid rows on a pure solid white background, crisp solid dark black ink, zero noise, high resolution";
+    navigator.clipboard.writeText(prompt);
+    setCopiedPrompt(true);
+    setTimeout(() => setCopiedPrompt(false), 2500);
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10 space-y-6 sm:space-y-8">
       {/* Introduction banner explaining the exact capability */}
@@ -82,15 +107,92 @@ export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
         <div className="max-w-3xl relative z-10 space-y-2">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Automatic White Background Removal & Glyph Extraction</span>
+            <span>100% In-Browser & Offline-Ready Glyph Extraction</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-100">
             Turn your drawn letters & numbers into a real TrueType font
           </h2>
           <p className="text-sm text-neutral-300 leading-relaxed">
             Upload an image containing your A-Z alphabet, 0-9 digits, or symbols on a white background.
-            Our engine automatically strips the background, isolates every glyph contour, maps them to standard font unicode, and exports an installable <code className="text-amber-300 font-mono">.ttf</code> font file.
+            Our engine runs entirely in your browser to automatically strip the background, isolate every glyph contour, map them to standard font unicode, and export an installable <code className="text-amber-300 font-mono">.ttf</code> font file.
           </p>
+        </div>
+      </div>
+
+      {/* Recommended Input Formats & Template Sheet Guide */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Card 1: Handwritten Grid / Printable Template */}
+        <div className="bg-neutral-850/80 border border-neutral-700/70 rounded-2xl p-5 space-y-3 shadow-md flex flex-col justify-between">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-amber-400">
+                <PenTool className="w-4 h-4" />
+                <span className="text-xs font-bold uppercase tracking-wider">Option 1: Clean Handwritten Sheet</span>
+              </div>
+              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                Fastest Local Extraction
+              </span>
+            </div>
+            <p className="text-xs text-neutral-300 leading-relaxed">
+              Write <strong>A-Z capitals</strong>, <strong>a-z lowercase</strong>, and <strong>0-9 digits</strong> separated with clean spacing on plain unlined white paper.
+              Avoiding full essay paragraphs or overlapping sentences allows instant 1-click contour extraction.
+            </p>
+          </div>
+          <div className="pt-2 border-t border-neutral-800 flex items-center justify-between gap-3">
+            <span className="text-[11px] text-neutral-400">
+              Need a grid? Print our ready-to-fill template:
+            </span>
+            <button
+              type="button"
+              id="btn-download-printable-template"
+              onClick={handleDownloadTemplate}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition active:scale-95 shrink-0"
+            >
+              <Download className="w-3.5 h-3.5 text-amber-400" />
+              <span>Download Printable Sheet</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Card 2: AI-Generated Character Sheet */}
+        <div className="bg-neutral-850/80 border border-neutral-700/70 rounded-2xl p-5 space-y-3 shadow-md flex flex-col justify-between">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-blue-400">
+                <Bot className="w-4 h-4" />
+                <span className="text-xs font-bold uppercase tracking-wider">Option 2: AI Image Generator Sheet</span>
+              </div>
+              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                Any Visual Style
+              </span>
+            </div>
+            <p className="text-xs text-neutral-300 leading-relaxed">
+              Generate an alphabet sheet with Midjourney, DALL-E, Ideogram, or Imagen in your favorite visual style and drop the result image here.
+            </p>
+          </div>
+          <div className="pt-2 border-t border-neutral-800 flex items-center justify-between gap-3">
+            <span className="text-[11px] text-neutral-400 truncate">
+              Copy optimal image prompt for AI generators:
+            </span>
+            <button
+              type="button"
+              id="btn-copy-ai-image-prompt"
+              onClick={handleCopyAiPrompt}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-neutral-800 hover:bg-neutral-750 text-neutral-200 border border-neutral-700 transition active:scale-95 shrink-0"
+            >
+              {copiedPrompt ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-emerald-300">Prompt Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Copy AI Prompt</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -186,10 +288,8 @@ export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
             onClick={() => {
               if (!isProcessing) fileInputRef.current?.click();
             }}
-            className={`border-2 border-dashed rounded-2xl p-6 sm:p-7 text-center transition-all duration-200 ${
-              isProcessing
-                ? "border-amber-500/70 bg-amber-500/10 cursor-wait"
-                : isDragging
+            className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all duration-200 relative overflow-hidden ${
+              isDragging
                 ? "border-amber-500 bg-amber-500/10 scale-[1.01] cursor-pointer"
                 : "border-neutral-700 hover:border-neutral-500 bg-neutral-800/40 hover:bg-neutral-800/70 cursor-pointer"
             }`}
@@ -202,47 +302,21 @@ export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
               disabled={isProcessing}
               onChange={handleFileChange}
             />
-            {isProcessing ? (
-              <div className="py-2 space-y-3">
-                <div className="w-12 h-12 mx-auto rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center shadow-inner">
-                  <div className="w-6 h-6 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-amber-300">
-                    {processingStage || "Analyzing and extracting characters..."}
-                  </p>
-                  <p className="text-xs text-neutral-400 mt-1">
-                    Isolating contours and preparing transparent cultural background
-                  </p>
-                </div>
-                {processingProgress !== undefined && (
-                  <div className="w-full max-w-xs mx-auto space-y-1.5 pt-1">
-                    <div className="w-full h-2 bg-neutral-900 rounded-full overflow-hidden border border-neutral-700">
-                      <div
-                        className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all duration-200 shadow-sm shadow-amber-500/50"
-                        style={{ width: `${Math.max(5, Math.min(100, processingProgress))}%` }}
-                      />
-                    </div>
-                    <div className="flex justify-between items-center text-[10px] text-neutral-400 font-mono">
-                      <span>In Progress</span>
-                      <span className="font-bold text-amber-300">{Math.round(processingProgress)}%</span>
-                    </div>
-                  </div>
-                )}
+            {isProcessing && (
+              <div className="absolute top-2 right-2 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/30 text-[10px] font-mono text-amber-300">
+                <div className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                <span>Processing...</span>
               </div>
-            ) : (
-              <>
-                <div className="w-12 h-12 mx-auto rounded-xl bg-neutral-700/60 flex items-center justify-center text-neutral-200 mb-3 shadow-inner">
-                  <Upload className="w-6 h-6 text-amber-400" />
-                </div>
-                <p className="text-sm font-semibold text-neutral-200">
-                  Click to browse or drop character sheet
-                </p>
-                <p className="text-xs text-neutral-400 mt-1">
-                  Supports PNG, JPG, or WEBP (white background recommended)
-                </p>
-              </>
             )}
+            <div className="w-12 h-12 mx-auto rounded-xl bg-neutral-700/60 flex items-center justify-center text-neutral-200 mb-3 shadow-inner">
+              <Upload className="w-6 h-6 text-amber-400" />
+            </div>
+            <p className="text-sm font-semibold text-neutral-200">
+              Click to browse or drop character sheet
+            </p>
+            <p className="text-xs text-neutral-400 mt-1">
+              Supports PNG, JPG, or WEBP (plain white or light background)
+            </p>
           </div>
 
           {/* Preset Sample Sheets */}
@@ -494,7 +568,7 @@ export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
             </div>
 
             {/* Canvas Display Body */}
-            <div className="p-4 sm:p-6 flex flex-col items-center justify-center min-h-[440px] bg-neutral-950/50">
+            <div className="p-4 sm:p-6 flex flex-col items-center justify-center min-h-[440px] bg-neutral-950/50 contain-paint">
               {isProcessing ? (
                 <div className="text-center py-16 space-y-3">
                   <div className="w-10 h-10 border-3 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto" />
@@ -504,11 +578,14 @@ export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
                 </div>
               ) : sourceImageUrl ? (
                 <div className="w-full flex flex-col items-center justify-center">
-                  <div className="relative max-w-full rounded-xl overflow-hidden border border-neutral-700/80 shadow-2xl">
+                  <div
+                    className="relative max-w-full rounded-xl overflow-hidden border border-neutral-700/80 shadow-xl bg-neutral-900"
+                    style={{ transform: "translateZ(0)" }}
+                  >
                     {viewMode === "cultural-color" ? (
                       /* Checkerboard transparency background with real cultural colors */
                       <div
-                        className="p-4 flex items-center justify-center"
+                        className="p-4 flex items-center justify-center bg-[#121217]"
                         style={{
                           backgroundImage: `
                             linear-gradient(45deg, #1c1c24 25%, transparent 25%),
@@ -517,21 +594,23 @@ export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
                             linear-gradient(-45deg, transparent 75%, #1c1c24 75%)
                           `,
                           backgroundSize: "20px 20px",
-                          backgroundColor: "#121217",
                         }}
                       >
                         {(colorCanvasDataUrl || cleanedCanvasDataUrl) ? (
                           <img
                             src={colorCanvasDataUrl || cleanedCanvasDataUrl || ""}
                             alt="Authentic Cultural Colors with Background Removed"
-                            className="max-h-[500px] w-auto object-contain rounded drop-shadow"
+                            decoding="async"
+                            loading="eager"
+                            className="max-h-[500px] w-auto object-contain rounded select-none pointer-events-none"
+                            style={{ transform: "translateZ(0)" }}
                           />
                         ) : null}
                       </div>
                     ) : viewMode === "cutout" ? (
                       /* Checkerboard transparency background with monochrome ink */
                       <div
-                        className="p-4 flex items-center justify-center"
+                        className="p-4 flex items-center justify-center bg-[#121217]"
                         style={{
                           backgroundImage: `
                             linear-gradient(45deg, #1c1c24 25%, transparent 25%),
@@ -540,14 +619,16 @@ export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
                             linear-gradient(-45deg, transparent 75%, #1c1c24 75%)
                           `,
                           backgroundSize: "20px 20px",
-                          backgroundColor: "#121217",
                         }}
                       >
                         {cleanedCanvasDataUrl ? (
                           <img
                             src={cleanedCanvasDataUrl}
                             alt="Cleaned Isolated Glyphs with White Background Removed"
-                            className="max-h-[500px] w-auto object-contain rounded drop-shadow"
+                            decoding="async"
+                            loading="eager"
+                            className="max-h-[500px] w-auto object-contain rounded select-none pointer-events-none"
+                            style={{ transform: "translateZ(0)" }}
                           />
                         ) : null}
                       </div>
@@ -556,7 +637,10 @@ export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
                         <img
                           src={sourceImageUrl}
                           alt="Original Character Sheet"
-                          className="max-h-[500px] w-auto object-contain rounded"
+                          decoding="async"
+                          loading="eager"
+                          className="max-h-[500px] w-auto object-contain rounded select-none pointer-events-none"
+                          style={{ transform: "translateZ(0)" }}
                         />
                       </div>
                     )}

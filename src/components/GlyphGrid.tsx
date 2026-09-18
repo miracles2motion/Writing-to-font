@@ -16,6 +16,7 @@ import {
   Maximize2,
   ListOrdered,
   ChevronDown,
+  Wand2,
 } from "lucide-react";
 import { DetectedGlyph } from "../types";
 import { GlyphCropModal } from "./GlyphCropModal";
@@ -44,7 +45,9 @@ interface GlyphGridProps {
   onAiAutoLabel: () => void;
   onProceedToMetrics: () => void;
   onOpenExpanderModal?: () => void;
+  onHarvestAlphabetFromNotes?: () => void;
   isAiLabeling: boolean;
+  isHarvesting?: boolean;
 }
 
 export const GlyphGrid: React.FC<GlyphGridProps> = ({
@@ -66,7 +69,9 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
   onAiAutoLabel,
   onProceedToMetrics,
   onOpenExpanderModal,
+  onHarvestAlphabetFromNotes,
   isAiLabeling,
+  isHarvesting = false,
 }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [activeFilter, setActiveFilter] = useState<
@@ -164,6 +169,24 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
 
           {/* Top Actions: AI Auto-Label, Review All Cutouts & Sequencing */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* One-Click Harvest Alphabet from Notes Button */}
+            {onHarvestAlphabetFromNotes && (
+              <button
+                id="btn-harvest-alphabet-from-notes"
+                onClick={onHarvestAlphabetFromNotes}
+                disabled={isHarvesting || isAiLabeling || glyphs.length === 0}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 hover:from-amber-400 hover:to-orange-400 active:scale-95 text-neutral-950 shadow-lg shadow-amber-500/20 disabled:opacity-50 transition border border-amber-400/40"
+                title="Single out unique A-Z, a-z, 0-9 & symbols from scattered handwriting and select cleanest exemplars in 1 click"
+              >
+                {isHarvesting ? (
+                  <div className="w-3.5 h-3.5 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5" />
+                )}
+                <span>{isHarvesting ? "Analyzing Scattered Notes..." : "⚡ Harvest Alphabet from Notes"}</span>
+              </button>
+            )}
+
             {/* Expand to Full Font Set Modal Trigger */}
             {onOpenExpanderModal && (
               <button
@@ -173,7 +196,7 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition active:scale-95 shadow-sm disabled:opacity-50"
                 title="Synthesize missing lowercase, digits, or punctuation based on your drawn characters"
               >
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <Wand2 className="w-3.5 h-3.5 text-amber-400" />
                 <span>Expand to Full Set</span>
               </button>
             )}
@@ -194,12 +217,12 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
               id="btn-ai-auto-label"
               onClick={onAiAutoLabel}
               disabled={isAiLabeling || glyphs.length === 0}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 active:scale-95 text-neutral-950 shadow-md shadow-amber-500/10 disabled:opacity-50 transition"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-neutral-800 hover:bg-neutral-750 active:scale-95 text-neutral-200 border border-neutral-700 disabled:opacity-50 transition"
             >
               {isAiLabeling ? (
-                <div className="w-3.5 h-3.5 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin" />
+                <div className="w-3.5 h-3.5 border-2 border-neutral-200 border-t-transparent rounded-full animate-spin" />
               ) : (
-                <Sparkles className="w-3.5 h-3.5" />
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
               )}
               <span>{isAiLabeling ? "AI Differentiating Upper & Lower..." : "AI Auto-Label with Gemini"}</span>
             </button>
@@ -238,6 +261,26 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Helper Callout for Scattered Notes / Complex Pages */}
+        {glyphs.length >= 20 && onHarvestAlphabetFromNotes && (
+          <div className="bg-amber-950/20 border border-amber-500/30 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5 text-neutral-200">
+              <Sparkles className="w-4 h-4 text-amber-400 flex-shrink-0" />
+              <span>
+                <strong>Uploaded handwritten notes or scattered text?</strong> Click <strong>Harvest Alphabet from Notes</strong> to single out unique A-Z, a-z, 0-9, pick the cleanest letter instances, and eliminate repeated duplicate letters in 1 click.
+              </span>
+            </div>
+            <button
+              id="btn-callout-harvest-notes"
+              onClick={onHarvestAlphabetFromNotes}
+              disabled={isHarvesting}
+              className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-neutral-950 font-bold transition active:scale-95 whitespace-nowrap shadow-sm"
+            >
+              {isHarvesting ? "Analyzing..." : "⚡ 1-Click Harvest"}
+            </button>
+          </div>
+        )}
 
         {/* Secondary control strip: Filters, Color Toggle & Batch operations */}
         <div className="pt-3 border-t border-neutral-700/60 flex flex-wrap items-center justify-between gap-3 text-xs">
