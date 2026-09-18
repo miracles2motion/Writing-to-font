@@ -24,6 +24,7 @@ import {
   FontBuildResult,
 } from "./utils/fontBuilder";
 import { downloadColorAssetPackZip } from "./utils/colorAssetExporter";
+import { SEQUENCE_PATTERNS } from "./utils/glyphUtils";
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<StudioTab>("upload");
@@ -43,7 +44,7 @@ export default function App() {
     contrast: 1.3,
     invert: false,
     minGlyphArea: 50,
-    mergeDistance: 22,
+    mergeDistance: 14,
     smoothing: 1.6,
   });
 
@@ -408,27 +409,62 @@ export default function App() {
     showToast(`Merged ${glyphIds.length} components into single glyph "${primaryTarget.char}"`);
   };
 
+  // Save updated glyph crop & contours
+  const handleSaveGlyph = (updatedGlyph: DetectedGlyph) => {
+    setGlyphs((prev) =>
+      prev.map((g) => (g.id === updatedGlyph.id ? updatedGlyph : g))
+    );
+    showToast(`Saved crop for glyph "${updatedGlyph.char}"`);
+  };
+
+  // Split a fused glyph into two separate glyphs
+  const handleSplitGlyph = (
+    originalId: string,
+    leftGlyph: DetectedGlyph,
+    rightGlyph: DetectedGlyph
+  ) => {
+    setGlyphs((prev) => {
+      const idx = prev.findIndex((g) => g.id === originalId);
+      if (idx === -1) return [...prev, leftGlyph, rightGlyph];
+      const copy = [...prev];
+      copy.splice(idx, 1, leftGlyph, rightGlyph);
+      return copy;
+    });
+    showToast(`Split into 2 glyphs: "${leftGlyph.char}" and "${rightGlyph.char}"`);
+  };
+
+  // Batch casing conversion (lower / upper)
+  const handleBatchCaseConvert = (
+    glyphIds: string[],
+    targetCase: "lower" | "upper"
+  ) => {
+    setGlyphs((prev) =>
+      prev.map((g) => {
+        if (glyphIds.includes(g.id)) {
+          const newChar =
+            targetCase === "lower"
+              ? g.char.toLowerCase()
+              : g.char.toUpperCase();
+          return {
+            ...g,
+            char: newChar,
+            unicode: newChar.charCodeAt(0),
+          };
+        }
+        return g;
+      })
+    );
+    showToast(
+      `Converted ${glyphIds.length} characters to ${
+        targetCase === "lower" ? "lowercase (a-z)" : "uppercase (A-Z)"
+      }`
+    );
+  };
+
   // Auto-sequence mappings
-  const handleAutoSequence = (pattern: "A-Z_0-9" | "0-9_A-Z" | "a-z") => {
-    let sequence: string[] = [];
-    if (pattern === "A-Z_0-9") {
-      sequence = [
-        ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-        ..."0123456789",
-        ..."!?.,:;\"'-+=/@#$%&*()",
-      ];
-    } else if (pattern === "0-9_A-Z") {
-      sequence = [
-        ..."0123456789",
-        ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-        ..."!?.,:;\"'-+=/@#$%&*()",
-      ];
-    } else {
-      sequence = [
-        ..."abcdefghijklmnopqrstuvwxyz",
-        ..."0123456789",
-      ];
-    }
+  const handleAutoSequence = (patternId: string) => {
+    const matched = SEQUENCE_PATTERNS.find((p) => p.id === patternId);
+    const sequence = matched ? matched.chars : SEQUENCE_PATTERNS[0].chars;
 
     setGlyphs((prev) =>
       prev.map((g, idx) => {
@@ -440,7 +476,7 @@ export default function App() {
         };
       })
     );
-    showToast(`Sequenced characters using pattern: ${pattern}`);
+    showToast(`Sequenced characters using pattern: ${matched?.name || patternId}`);
   };
 
   // AI Auto-label with Gemini
@@ -492,13 +528,13 @@ export default function App() {
       }
 
       showToast(
-        `Gemini AI recognized ${data.characters?.length || 0} characters! Style: ${data.style || "Custom"}`
+        `Gemini AI recognized ${data.characters?.length || 0} characters with casing! Style: ${data.style || "Custom"}`
       );
     } catch (err: any) {
       console.error("AI auto-label error:", err);
       // Fallback for static hosting (GitHub Pages)
-      handleAutoSequence("A-Z_0-9");
-      showToast("Auto-sequenced A-Z, 0-9. (AI vision requires backend server)");
+      handleAutoSequence("A-Z_a-z_0-9");
+      showToast("Auto-sequenced A-Z, a-z, 0-9. (AI vision requires backend server)");
     } finally {
       setIsAiLabeling(false);
     }
@@ -546,10 +582,19 @@ export default function App() {
         {currentTab === "glyphs" && (
           <GlyphGrid
             glyphs={glyphs}
+            cleanedCanvas={processedResult?.cleanedCanvas || null}
+            colorCanvas={processedResult?.colorCanvas || null}
+            sourceCanvas={processedResult?.colorCanvas || processedResult?.cleanedCanvas || null}
+            binaryMask={processedResult?.binaryMask || null}
+            maskWidth={processedResult?.width || 1200}
+            maskHeight={processedResult?.height || 800}
+            smoothing={imageSettings.smoothing}
             onUpdateGlyphChar={handleUpdateGlyphChar}
             onDeleteGlyph={handleDeleteGlyph}
             onMergeGlyphs={handleMergeGlyphs}
-            onAddCustomGlyph={() => {}}
+            onSaveGlyph={handleSaveGlyph}
+            onSplitGlyph={handleSplitGlyph}
+            onBatchCaseConvert={handleBatchCaseConvert}
             onAutoSequence={handleAutoSequence}
             onAiAutoLabel={handleAiAutoLabel}
             onProceedToMetrics={() => setCurrentTab("metrics")}

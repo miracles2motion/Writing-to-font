@@ -56,21 +56,39 @@ app.post("/api/ai/recognize-glyphs", async (req, res) => {
     // Clean base64 string
     const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, "");
 
-    const prompt = `Analyze this character sheet image. It contains hand-drawn or designed characters (letters A-Z, numbers 0-9, and symbols).
-There are approximately ${detectedCount || "20-50"} glyphs arranged in rows or a grid on a white background.
+    const prompt = `You are a world-class typographic analyst, font engineer, and OCR specialist.
+Analyze this character sheet image containing hand-drawn or designed alphabet characters, numbers, and symbols on a white background.
+There are approximately ${detectedCount || "20-60"} glyphs arranged in rows or a grid.
 
-Please inspect the characters visible from left-to-right, top-to-bottom:
-1. List all detected characters in their reading order (uppercase letters, lowercase if any, digits 0-9, symbols like !?.,- etc).
-2. Describe the font's artistic style (e.g. geometric sans, playful handwritten, bold brush, gothic, slab serif).
-3. Suggest an appropriate Font Family Name based on its visual personality.
-4. Estimate key metrics: whether it has serifs, stroke weight (Light, Regular, Bold, Black), slant (Upright or Italic), and uppercase x-height proportion.
+CRITICAL CASING & CHARACTER RECOGNITION RULES:
+1. RIGOROUS UPPERCASE (A-Z) VS. LOWERCASE (a-z) DIFFERENTIATION:
+   - Carefully examine the visual anatomy and relative proportions:
+     - Distinct lowercase shapes: 'a' vs 'A', 'b' vs 'B', 'd' vs 'D', 'e' vs 'E', 'g' vs 'G', 'm' vs 'M', 'n' vs 'N', 'q' vs 'Q', 'r' vs 'R', 't' vs 'T'.
+     - Ascenders extending tall: lowercase 'b', 'd', 'f', 'h', 'k', 'l', 't'.
+     - Descenders dipping low: lowercase 'g', 'j', 'p', 'q', 'y'.
+     - X-height characters: 'c', 'o', 's', 'v', 'w', 'x', 'z'. If they appear alongside capitals and are clearly shorter (x-height), identify them as lowercase ('c', 'o', 's'...), NOT uppercase.
+   - If the user wrote lowercase characters, OUTPUT THEM STRICTLY IN LOWERCASE (e.g. "a", "b", "c").
+   - NEVER convert lowercase letters into uppercase letters!
+   - If the sheet has uppercase followed by lowercase (e.g. A-Z on top rows, a-z on bottom rows, or paired Aa, Bb, Cc), preserve each letter's exact casing.
+
+2. DIGITS & SYMBOLS:
+   - Digits 0-9: "0", "1", "2", "3", "4", "5", "6", "7", "8", "9".
+   - Punctuation & Symbols: "!", "?", ".", ",", ":", ";", "'", '"', "-", "+", "=", "/", "@", "#", "$", "%", "&", "*", "(", ")".
+
+3. ORDER:
+   - List all detected characters strictly in natural visual reading order: row by row, from top-to-bottom and left-to-right.
+
+4. METRICS & STYLE:
+   - Describe the font's artistic style (e.g. "African Cultural Display Sans", "Handmade Casual Marker", "Geometric Minimalist").
+   - Suggest an evocative font family name matching its personality.
+   - Estimate weight (e.g. "Regular", "Bold", "Black").
 
 Respond in JSON format with:
-- characters: array of single character strings in reading order, e.g. ["A", "B", "C", ...]
-- style: string (e.g. "Playful Handwritten Sans")
-- suggestedName: string (e.g. "SunnyHand")
-- weight: string (e.g. "Bold")
-- description: string (short 1-2 sentence aesthetic summary)`;
+- characters: array of single character strings in reading order with EXACT UPPER/LOWER CASING, e.g. ["A", "B", "C"] or ["a", "b", "c"]
+- style: string
+- suggestedName: string
+- weight: string
+- description: string`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3.8-flash",
@@ -93,7 +111,7 @@ Respond in JSON format with:
             characters: {
               type: Type.ARRAY,
               items: { type: Type.STRING },
-              description: "Array of detected single characters in visual reading order",
+              description: "Array of detected single characters with exact uppercase/lowercase casing preserved in visual reading order",
             },
             style: {
               type: Type.STRING,
@@ -125,6 +143,58 @@ Respond in JSON format with:
     return res.status(500).json({
       error: error.message || "Failed to analyze glyphs with Gemini.",
     });
+  }
+});
+
+// AI Single-Glyph Casing & Character Classifier
+app.post("/api/ai/classify-glyph", async (req, res) => {
+  try {
+    const { imageBase64, mimeType = "image/png" } = req.body;
+    if (!imageBase64) {
+      return res.status(400).json({ error: "Missing imageBase64" });
+    }
+
+    const ai = getAI();
+    if (!ai) {
+      return res.status(503).json({ error: "GEMINI_API_KEY is not configured." });
+    }
+
+    const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+
+    const prompt = `Look at this single cropped character image from a font sheet.
+Identify what exact character this is, paying crucial attention to CASING (uppercase vs lowercase):
+- Is it an UPPERCASE letter (e.g. 'A', 'B', 'C'...), a LOWERCASE letter (e.g. 'a', 'b', 'c'...), a DIGIT (0-9), or a SYMBOL?
+- Look for distinctive lowercase features: loop in 'a', crossbar and ear in 'g', curved top in 'r', ascenders on 'b'/'d'/'h'/'k'/'l'/'t', descenders on 'p'/'q'/'y', etc.
+- Return the single character in 'char', 'casing' ("upper" | "lower" | "digit" | "symbol"), and a 1-sentence 'rationale'.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.8-flash",
+      contents: {
+        parts: [
+          { inlineData: { data: cleanBase64, mimeType } },
+          { text: prompt },
+        ],
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            char: { type: Type.STRING, description: "The single exact character, case-sensitive" },
+            casing: { type: Type.STRING, description: "Casing type: 'upper', 'lower', 'digit', or 'symbol'" },
+            confidence: { type: Type.NUMBER, description: "Confidence score between 0 and 1" },
+            rationale: { type: Type.STRING, description: "Brief visual rationale" },
+          },
+          required: ["char", "casing"],
+        },
+      },
+    });
+
+    const parsed = JSON.parse(response.text || "{}");
+    return res.json(parsed);
+  } catch (err: any) {
+    console.error("Error classifying glyph:", err);
+    return res.status(500).json({ error: err.message || "Failed to classify glyph." });
   }
 });
 

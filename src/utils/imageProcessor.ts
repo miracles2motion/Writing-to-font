@@ -182,7 +182,8 @@ export function segmentGlyphs(
     }
   }
 
-  // Multi-part character grouping (e.g., dots of i/j, colon, semicolon, exclamation, question mark, equals, percent)
+  // Multi-part character grouping: STRICTLY for vertical accents & dots (e.g. dots of i/j, colon, semicolon, !, ?, =)
+  // NEVER merge horizontally adjacent characters into each other!
   const mergedBoxes: BoundingBox[] = [];
   const used = new Set<number>();
 
@@ -200,31 +201,44 @@ export function segmentGlyphs(
         if (used.has(j)) continue;
         const o = rawBoxes[j];
 
-        // Check if `o` is vertically stacked or directly adjacent to `b`
+        // Horizontal overlap (must have true positive overlap, never negative)
         const xOverlap = Math.min(b.x + b.width, o.x + o.width) - Math.max(b.x, o.x);
-        const yOverlap = Math.min(b.y + b.height, o.y + o.height) - Math.max(b.y, o.y);
 
-        const isVerticallyAligned =
-          xOverlap > -8 &&
-          (Math.abs(b.y - (o.y + o.height)) < maxGap ||
-            Math.abs(o.y - (b.y + b.height)) < maxGap);
+        // Centers must be horizontally aligned (one is stacked vertically above/below the other)
+        const bCenterX = b.x + b.width / 2;
+        const oCenterX = o.x + o.width / 2;
+        const centerDistanceX = Math.abs(bCenterX - oCenterX);
+        const maxAllowedCenterDiff = Math.max(b.width, o.width) * 0.75;
 
-        const isDiagonallyClose =
-          xOverlap > -5 &&
-          yOverlap > -5 &&
-          Math.hypot(b.x - o.x, b.y - o.y) < maxGap * 1.2;
+        // Vertical distance between components
+        const verticalDistance =
+          b.y > o.y
+            ? b.y - (o.y + o.height)
+            : o.y - (b.y + b.height);
 
-        if (isVerticallyAligned || isDiagonallyClose) {
-          // Merge bounding boxes
+        // Character height comparison: at least one component MUST be an accent or dot, OR both are small punctuation (:, =)
+        const minH = Math.min(b.height, o.height);
+        const maxH = Math.max(b.height, o.height);
+        const isAccentOrDot = minH < maxH * 0.55 || (b.height < 45 && o.height < 45);
+
+        // Only merge if vertically stacked, horizontally aligned, with positive xOverlap, and one is an accent/dot
+        const shouldMerge =
+          verticalDistance >= -4 &&
+          verticalDistance < maxGap &&
+          centerDistanceX < maxAllowedCenterDiff &&
+          xOverlap > 2 &&
+          isAccentOrDot;
+
+        if (shouldMerge) {
           const minX = Math.min(b.x, o.x);
           const minY = Math.min(b.y, o.y);
           const maxX = Math.max(b.x + b.width, o.x + o.width);
           const maxY = Math.max(b.y + b.height, o.y + o.height);
 
-          // Avoid merging completely different lines of text
+          // Guard against merging distinct lines
           const mergedHeight = maxY - minY;
           const avgSingleHeight = (b.height + o.height) / 2;
-          if (mergedHeight < avgSingleHeight * 2.8) {
+          if (mergedHeight < avgSingleHeight * 2.5) {
             b = {
               x: minX,
               y: minY,

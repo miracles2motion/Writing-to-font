@@ -16,14 +16,21 @@ Upload an image containing letters, numbers, and symbols on a white background. 
   
 - **Intelligent Glyph Segmentation & Vectorization**:
   - Connected component labeling discovers individual characters across the sheet.
-  - Smart clustering automatically unifies multi-part glyphs (like dots on `i`, `j`, `!`, `?`, `:`, `;`).
+  - Smart clustering unifies multi-part glyphs (vertical dots on `i`, `j`, `!`, `?`, `:`, `;`) while strictly preventing horizontal bleeding into neighboring letters.
   - Marching Squares contour tracing converts pixel contours into clean vector outlines.
 
-- **Character Mapping & Sequencing**:
-  - Click any character tag to edit its mapping with immediate Unicode synchronization.
-  - One-click auto-sequencing presets (`A-Z, 0-9` or `0-9, A-Z`).
-  - Batch selection tools for merging split strokes or deleting unwanted marks.
-  - *(Optional)* **AI Auto-Label with Gemini**: Visual handwriting recognition to automatically detect letters in reading order.
+- **Manual Glyph Review & Cutout Editor**:
+  - **Interactive Crop & Cutout Modal**: Click **Edit Crop** on any character to drag or resize bounding boxes, trim excess whitespace, or remove neighboring strokes that slipped in.
+  - **Neighbor Bleed Trimming**: Directional edge-nudging buttons (Trim Left, Trim Right, Trim Top, Trim Bottom) for pixel-perfect isolation.
+  - **Character Split Tool**: For letters drawn too closely that became fused together, easily split them horizontally into two distinct independent glyphs in one click.
+  - **Single-Character AI Classification**: Re-classify any individual edited glyph with dedicated Gemini vision.
+
+- **Uppercase vs. Lowercase Recognition & Management**:
+  - **Full Casing Awareness**: Distinguishes between uppercase (`A-Z`) and lowercase (`a-z`) glyphs based on relative x-height, ascenders, descenders, and visual geometry.
+  - **Quick Casing Toggle (`a ⇄ A`)**: Instantly toggle individual characters between uppercase and lowercase with a single click.
+  - **Batch Case Conversion**: Select any group of characters and convert them simultaneously to lowercase or uppercase.
+  - **Casing Badges & Filters**: Visual color-coded tags (`[CAP]` blue, `[lower]` amber, `[0-9]` emerald) and instant filter tabs.
+  - **Expanded Sequencing Presets**: Auto-sequence `A-Z, a-z, 0-9`, `a-z, 0-9`, `Aa, Bb, Cc...`, or standalone alphabets.
 
 - **Standard Font Specification Matching**:
   - **Synthesize Missing Lowercase (`a-z`)**: If your sheet only includes uppercase characters, the studio automatically derives harmonized small-caps lowercase glyphs so typing normal text never produces blank squares.
@@ -125,13 +132,16 @@ https://<your-username>.github.io/<your-repo-name>/
 │   │   ├── Header.tsx            # Navigation and compile status
 │   │   ├── UploadAndCutout.tsx   # Image upload, background removal, threshold sliders
 │   │   ├── GlyphGrid.tsx         # Interactive glyph cards, re-tagging & sequencing
+│   │   ├── GlyphCropModal.tsx    # Manual bounding box crop, neighbor trim & split modal
 │   │   ├── MetricsCompleter.tsx  # Standard font completion & metric sliders
 │   │   ├── TypeTester.tsx        # Live interactive typing playground & waterfall
 │   │   └── ExportPanel.tsx       # .TTF download, CSS snippet & install instructions
 │   ├── utils/
 │   │   ├── imageProcessor.ts     # Binarization & connected-component segmentation
+│   │   ├── glyphUtils.ts         # Crop adjustment, character splitting & casing helpers
 │   │   ├── vectorizer.ts         # Marching squares contour extraction
 │   │   ├── fontBuilder.ts        # OpenType.js font compilation & lowercase synthesis
+│   │   ├── colorAssetExporter.ts # Cultural color character pack ZIP exporter
 │   │   └── sampleSheets.ts       # Sample character sheet presets
 │   ├── App.tsx                   # Main state coordinator
 │   ├── main.tsx                  # React entry point

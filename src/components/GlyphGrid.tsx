@@ -6,22 +6,41 @@ import {
   Trash2,
   Plus,
   ArrowRight,
-  HelpCircle,
   Filter,
   CheckSquare,
   Square,
   Edit2,
   Check,
+  Scissors,
+  Split,
+  Maximize2,
+  ListOrdered,
+  ChevronDown,
 } from "lucide-react";
 import { DetectedGlyph } from "../types";
+import { GlyphCropModal } from "./GlyphCropModal";
+import {
+  getCharacterCasing,
+  SEQUENCE_PATTERNS,
+  toggleCharacterCase,
+} from "../utils/glyphUtils";
 
 interface GlyphGridProps {
   glyphs: DetectedGlyph[];
+  cleanedCanvas: HTMLCanvasElement | null;
+  colorCanvas: HTMLCanvasElement | null;
+  sourceCanvas: HTMLCanvasElement | HTMLImageElement | null;
+  binaryMask: Uint8Array | null;
+  maskWidth: number;
+  maskHeight: number;
+  smoothing: number;
   onUpdateGlyphChar: (glyphId: string, newChar: string) => void;
   onDeleteGlyph: (glyphId: string) => void;
   onMergeGlyphs: (glyphIds: string[]) => void;
-  onAddCustomGlyph: (char: string, dataUrl: string, bbox: { width: number; height: number }) => void;
-  onAutoSequence: (pattern: "A-Z_0-9" | "0-9_A-Z" | "a-z") => void;
+  onSaveGlyph: (updated: DetectedGlyph) => void;
+  onSplitGlyph: (originalId: string, leftGlyph: DetectedGlyph, rightGlyph: DetectedGlyph) => void;
+  onBatchCaseConvert: (glyphIds: string[], targetCase: "lower" | "upper") => void;
+  onAutoSequence: (patternId: string) => void;
   onAiAutoLabel: () => void;
   onProceedToMetrics: () => void;
   isAiLabeling: boolean;
@@ -29,21 +48,37 @@ interface GlyphGridProps {
 
 export const GlyphGrid: React.FC<GlyphGridProps> = ({
   glyphs,
+  cleanedCanvas,
+  colorCanvas,
+  sourceCanvas,
+  binaryMask,
+  maskWidth,
+  maskHeight,
+  smoothing,
   onUpdateGlyphChar,
   onDeleteGlyph,
   onMergeGlyphs,
-  onAddCustomGlyph,
+  onSaveGlyph,
+  onSplitGlyph,
+  onBatchCaseConvert,
   onAutoSequence,
   onAiAutoLabel,
   onProceedToMetrics,
   isAiLabeling,
 }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [activeFilter, setActiveFilter] = useState<"all" | "letters" | "numbers" | "symbols">("all");
+  const [activeFilter, setActiveFilter] = useState<
+    "all" | "upper" | "lower" | "numbers" | "symbols"
+  >("all");
   const [editingGlyphId, setEditingGlyphId] = useState<string | null>(null);
   const [glyphViewMode, setGlyphViewMode] = useState<"color" | "mono">("color");
-  const [customCharModalOpen, setCustomCharModalOpen] = useState(false);
-  const [newCharInput, setNewCharInput] = useState("");
+
+  // Manual Crop & Cutout Modal State
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [cropGlyphIndex, setCropGlyphIndex] = useState<number>(0);
+
+  // Sequence dropdown toggle
+  const [sequenceMenuOpen, setSequenceMenuOpen] = useState(false);
 
   const toggleSelect = (id: string) => {
     const next = new Set(selectedIds);
@@ -75,21 +110,29 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
     setSelectedIds(new Set());
   };
 
-  // Filtered glyph list
+  // Open crop modal for specific glyph
+  const openCropModalForGlyph = (index: number) => {
+    if (index >= 0 && index < glyphs.length) {
+      setCropGlyphIndex(index);
+      setCropModalOpen(true);
+    }
+  };
+
+  // Filtered glyph list with casing differentiation
   const filteredGlyphs = glyphs.filter((g) => {
-    if (activeFilter === "letters") {
-      return (g.char >= "A" && g.char <= "Z") || (g.char >= "a" && g.char <= "z");
-    }
-    if (activeFilter === "numbers") {
-      return g.char >= "0" && g.char <= "9";
-    }
-    if (activeFilter === "symbols") {
-      const isLetter = (g.char >= "A" && g.char <= "Z") || (g.char >= "a" && g.char <= "z");
-      const isNum = g.char >= "0" && g.char <= "9";
-      return !isLetter && !isNum;
-    }
+    const casing = getCharacterCasing(g.char);
+    if (activeFilter === "upper") return casing === "upper";
+    if (activeFilter === "lower") return casing === "lower";
+    if (activeFilter === "numbers") return casing === "digit";
+    if (activeFilter === "symbols") return casing === "symbol";
     return true;
   });
+
+  const upperCount = glyphs.filter((g) => getCharacterCasing(g.char) === "upper").length;
+  const lowerCount = glyphs.filter((g) => getCharacterCasing(g.char) === "lower").length;
+  const digitCount = glyphs.filter((g) => getCharacterCasing(g.char) === "digit").length;
+
+  const currentCropGlyph = glyphs[cropGlyphIndex] || null;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
@@ -97,19 +140,40 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
       <div className="bg-neutral-800/50 border border-neutral-700/80 rounded-2xl p-5 shadow-lg space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg font-bold text-neutral-100 flex items-center gap-2">
+            <h2 className="text-lg font-bold text-neutral-100 flex flex-wrap items-center gap-2">
               <span>Isolated Glyphs & Character Mapping</span>
               <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-semibold border border-amber-500/20">
                 {glyphs.length} Total
               </span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 font-semibold border border-blue-500/20">
+                {upperCount} Upper [A-Z]
+              </span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 font-semibold border border-amber-500/20">
+                {lowerCount} Lower [a-z]
+              </span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20">
+                {digitCount} Digits [0-9]
+              </span>
             </h2>
             <p className="text-xs text-neutral-400 mt-0.5">
-              Verify the assigned character for each isolated drawing. Click any character tag to change it, or use AI auto-label.
+              Review isolated characters. Click <strong>Edit Crop</strong> on any glyph to trim neighbor characters that slipped in or split fused letters.
             </p>
           </div>
 
-          {/* AI Recognition & Sequence Buttons */}
+          {/* Top Actions: AI Auto-Label, Review All Cutouts & Sequencing */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* Step-by-Step Cutout Review */}
+            <button
+              id="btn-review-cutouts-step-by-step"
+              onClick={() => openCropModalForGlyph(0)}
+              disabled={glyphs.length === 0}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-neutral-800 hover:bg-neutral-750 text-neutral-200 border border-neutral-700 transition active:scale-95 disabled:opacity-50"
+            >
+              <Scissors className="w-3.5 h-3.5 text-amber-400" />
+              <span>Review Cutouts Manually</span>
+            </button>
+
+            {/* AI Auto-Label Button */}
             <button
               id="btn-ai-auto-label"
               onClick={onAiAutoLabel}
@@ -121,26 +185,40 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
               ) : (
                 <Sparkles className="w-3.5 h-3.5" />
               )}
-              <span>{isAiLabeling ? "AI Scanning Handwriting..." : "AI Auto-Label with Gemini"}</span>
+              <span>{isAiLabeling ? "AI Differentiating Upper & Lower..." : "AI Auto-Label with Gemini"}</span>
             </button>
 
-            <div className="flex items-center bg-neutral-900 border border-neutral-700/80 rounded-xl p-0.5 text-xs">
+            {/* Sequence Patterns Dropdown */}
+            <div className="relative">
               <button
-                id="btn-auto-sequence-az"
-                onClick={() => onAutoSequence("A-Z_0-9")}
-                title="Map sequentially: A-Z then 0-9 & symbols"
-                className="px-2.5 py-1.5 rounded-lg text-neutral-300 hover:text-neutral-100 hover:bg-neutral-800 transition font-medium"
+                onClick={() => setSequenceMenuOpen(!sequenceMenuOpen)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-neutral-900 border border-neutral-700 text-neutral-200 hover:bg-neutral-800 transition"
               >
-                Seq: A-Z, 0-9
+                <ListOrdered className="w-3.5 h-3.5 text-amber-400" />
+                <span>Auto-Sequence</span>
+                <ChevronDown className="w-3 h-3 text-neutral-400" />
               </button>
-              <button
-                id="btn-auto-sequence-09"
-                onClick={() => onAutoSequence("0-9_A-Z")}
-                title="Map sequentially: 0-9 then A-Z"
-                className="px-2.5 py-1.5 rounded-lg text-neutral-300 hover:text-neutral-100 hover:bg-neutral-800 transition font-medium"
-              >
-                Seq: 0-9, A-Z
-              </button>
+
+              {sequenceMenuOpen && (
+                <div className="absolute right-0 mt-2 w-64 bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl py-2 z-30 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="px-3 py-1.5 text-[11px] font-bold text-neutral-400 uppercase tracking-wider border-b border-neutral-800">
+                    Apply Sequence Preset
+                  </div>
+                  {SEQUENCE_PATTERNS.map((pattern) => (
+                    <button
+                      key={pattern.id}
+                      onClick={() => {
+                        onAutoSequence(pattern.id);
+                        setSequenceMenuOpen(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2 hover:bg-neutral-800 text-xs text-neutral-200 hover:text-amber-300 transition flex flex-col"
+                    >
+                      <span className="font-semibold">{pattern.name}</span>
+                      <span className="text-[10px] text-neutral-500">{pattern.description}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -148,7 +226,7 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
         {/* Secondary control strip: Filters, Color Toggle & Batch operations */}
         <div className="pt-3 border-t border-neutral-700/60 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex flex-wrap items-center gap-2">
-            {/* Filters */}
+            {/* Filters with Casing Tabs */}
             <div className="flex items-center gap-1 bg-neutral-900/90 p-1 rounded-xl border border-neutral-750">
               <button
                 onClick={() => setActiveFilter("all")}
@@ -161,30 +239,40 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
                 All ({glyphs.length})
               </button>
               <button
-                onClick={() => setActiveFilter("letters")}
-                className={`px-3 py-1 rounded-lg font-medium transition ${
-                  activeFilter === "letters"
+                onClick={() => setActiveFilter("upper")}
+                className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                  activeFilter === "upper"
+                    ? "bg-blue-500 text-neutral-950 font-semibold"
+                    : "text-neutral-400 hover:text-neutral-200"
+                }`}
+              >
+                Uppercase ({upperCount})
+              </button>
+              <button
+                onClick={() => setActiveFilter("lower")}
+                className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                  activeFilter === "lower"
                     ? "bg-amber-500 text-neutral-950 font-semibold"
                     : "text-neutral-400 hover:text-neutral-200"
                 }`}
               >
-                Letters
+                Lowercase ({lowerCount})
               </button>
               <button
                 onClick={() => setActiveFilter("numbers")}
-                className={`px-3 py-1 rounded-lg font-medium transition ${
+                className={`px-2.5 py-1 rounded-lg font-medium transition ${
                   activeFilter === "numbers"
-                    ? "bg-amber-500 text-neutral-950 font-semibold"
+                    ? "bg-emerald-500 text-neutral-950 font-semibold"
                     : "text-neutral-400 hover:text-neutral-200"
                 }`}
               >
-                Numbers
+                Digits ({digitCount})
               </button>
               <button
                 onClick={() => setActiveFilter("symbols")}
-                className={`px-3 py-1 rounded-lg font-medium transition ${
+                className={`px-2.5 py-1 rounded-lg font-medium transition ${
                   activeFilter === "symbols"
-                    ? "bg-amber-500 text-neutral-950 font-semibold"
+                    ? "bg-neutral-700 text-neutral-100 font-semibold"
                     : "text-neutral-400 hover:text-neutral-200"
                 }`}
               >
@@ -219,8 +307,8 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
             </div>
           </div>
 
-          {/* Batch Merge / Delete */}
-          <div className="flex items-center gap-2">
+          {/* Batch operations */}
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={selectAll}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-neutral-700 bg-neutral-800/80 hover:bg-neutral-750 text-neutral-300 transition"
@@ -232,6 +320,26 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
               )}
               <span>Select All</span>
             </button>
+
+            {/* Batch Case Conversion */}
+            {selectedIds.size > 0 && (
+              <div className="flex items-center gap-1 bg-neutral-900 p-0.5 rounded-xl border border-neutral-750">
+                <button
+                  onClick={() => onBatchCaseConvert(Array.from(selectedIds), "lower")}
+                  title="Convert selected characters to lowercase"
+                  className="px-2 py-1 rounded-lg text-amber-400 hover:bg-neutral-800 text-[11px] font-semibold transition"
+                >
+                  To Lower (a-z)
+                </button>
+                <button
+                  onClick={() => onBatchCaseConvert(Array.from(selectedIds), "upper")}
+                  title="Convert selected characters to uppercase"
+                  className="px-2 py-1 rounded-lg text-blue-400 hover:bg-neutral-800 text-[11px] font-semibold transition"
+                >
+                  To Upper (A-Z)
+                </button>
+              </div>
+            )}
 
             {selectedIds.size >= 2 && (
               <button
@@ -261,6 +369,8 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
         {filteredGlyphs.map((glyph) => {
           const isSelected = selectedIds.has(glyph.id);
           const isEditing = editingGlyphId === glyph.id;
+          const casing = getCharacterCasing(glyph.char);
+          const originalIndex = glyphs.findIndex((g) => g.id === glyph.id);
 
           return (
             <div
@@ -286,21 +396,35 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
                 )}
               </button>
 
-              {/* Delete single button */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteGlyph(glyph.id);
-                }}
-                title="Remove glyph"
-                className="absolute top-2 right-2 p-1 text-neutral-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition z-10"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              {/* Top Right: Edit Crop / Delete Buttons */}
+              <div className="absolute top-2 right-2 flex items-center gap-1 z-10 opacity-0 group-hover:opacity-100 transition">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openCropModalForGlyph(originalIndex);
+                  }}
+                  title="Edit Crop / Cutout & Trim Edges"
+                  className="p-1 rounded bg-neutral-800/90 text-neutral-300 hover:text-amber-400 hover:bg-neutral-700 transition"
+                >
+                  <Scissors className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteGlyph(glyph.id);
+                  }}
+                  title="Remove glyph"
+                  className="p-1 rounded bg-neutral-800/90 text-neutral-400 hover:text-red-400 hover:bg-neutral-700 transition"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
 
-              {/* Glyph Image Cutout on subtle checkerboard */}
+              {/* Glyph Image Cutout on checkerboard */}
               <div
-                className="w-20 h-20 rounded-xl flex items-center justify-center mb-3 mt-4 border border-neutral-750 overflow-hidden"
+                onClick={() => openCropModalForGlyph(originalIndex)}
+                className="w-20 h-20 rounded-xl flex items-center justify-center mb-2 mt-4 border border-neutral-750 overflow-hidden cursor-pointer hover:border-amber-500/60 transition group/img relative"
+                title="Click to edit crop or trim cutout"
                 style={{
                   backgroundImage: `
                     linear-gradient(45deg, #18181f 25%, transparent 25%),
@@ -335,12 +459,17 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
                     {glyph.char}
                   </span>
                 )}
+
+                {/* Hover overlay hint */}
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/img:opacity-100 flex items-center justify-center transition">
+                  <Scissors className="w-4 h-4 text-amber-300" />
+                </div>
               </div>
 
-              {/* Character Mapping Badge / Editable Input */}
-              <div className="w-full">
-                {isEditing ? (
-                  <div className="flex items-center justify-center gap-1">
+              {/* Character Mapping Badge, Casing Tag & Quick Toggle */}
+              <div className="w-full space-y-1.5">
+                <div className="flex items-center justify-center gap-1">
+                  {isEditing ? (
                     <input
                       type="text"
                       maxLength={1}
@@ -364,24 +493,70 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
                       }}
                       className="w-10 h-8 text-center text-sm font-bold bg-amber-500 text-neutral-950 rounded-lg outline-none ring-2 ring-amber-400"
                     />
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setEditingGlyphId(glyph.id)}
-                    className="group/btn inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-neutral-900 border border-neutral-700 hover:border-amber-400/60 hover:bg-neutral-750 transition"
-                    title="Click to edit character"
-                  >
-                    <span className="font-mono font-bold text-sm text-neutral-100 group-hover/btn:text-amber-300">
-                      {glyph.char}
-                    </span>
-                    <Edit2 className="w-3 h-3 text-neutral-500 group-hover/btn:text-amber-400 opacity-60 group-hover/btn:opacity-100" />
-                  </button>
-                )}
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setEditingGlyphId(glyph.id)}
+                        className="group/btn inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-neutral-900 border border-neutral-700 hover:border-amber-400/60 hover:bg-neutral-750 transition"
+                        title="Click to edit character label"
+                      >
+                        <span className="font-mono font-bold text-sm text-neutral-100 group-hover/btn:text-amber-300">
+                          {glyph.char}
+                        </span>
+                        <Edit2 className="w-2.5 h-2.5 text-neutral-500 group-hover/btn:text-amber-400 opacity-60 group-hover/btn:opacity-100" />
+                      </button>
 
-                {/* Unicode and dimensions footer */}
-                <div className="mt-2 text-[10px] text-neutral-500 font-mono">
-                  U+{glyph.char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")} • {glyph.bbox.width}x{glyph.bbox.height}
+                      {/* Quick Case Toggle Button (a ⇄ A) */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const toggled = toggleCharacterCase(glyph.char);
+                          onUpdateGlyphChar(glyph.id, toggled);
+                        }}
+                        title={`Toggle casing: ${glyph.char} ⇄ ${toggleCharacterCase(glyph.char)}`}
+                        className="p-1 rounded-lg bg-neutral-900 border border-neutral-750 hover:bg-neutral-750 text-neutral-400 hover:text-amber-300 transition"
+                      >
+                        <ArrowUpDown className="w-3 h-3" />
+                      </button>
+                    </>
+                  )}
                 </div>
+
+                {/* Casing Badge & Dimensions footer */}
+                <div className="flex items-center justify-center gap-1 text-[10px] font-mono">
+                  <span
+                    className={`px-1.5 py-0.2 rounded font-bold ${
+                      casing === "upper"
+                        ? "bg-blue-500/10 text-blue-400"
+                        : casing === "lower"
+                        ? "bg-amber-500/10 text-amber-400"
+                        : casing === "digit"
+                        ? "bg-emerald-500/10 text-emerald-400"
+                        : "bg-neutral-800 text-neutral-400"
+                    }`}
+                  >
+                    {casing === "upper"
+                      ? "CAP"
+                      : casing === "lower"
+                      ? "lower"
+                      : casing === "digit"
+                      ? "0-9"
+                      : "SYM"}
+                  </span>
+                  <span className="text-neutral-500">
+                    {glyph.bbox.width}x{glyph.bbox.height}
+                  </span>
+                </div>
+
+                {/* Edit Cutout button */}
+                <button
+                  onClick={() => openCropModalForGlyph(originalIndex)}
+                  className="w-full mt-1 py-1 rounded-lg text-[11px] font-medium bg-neutral-800/80 hover:bg-amber-500/20 hover:text-amber-300 text-neutral-400 border border-neutral-750 transition flex items-center justify-center gap-1"
+                >
+                  <Scissors className="w-3 h-3" />
+                  <span>Edit Crop</span>
+                </button>
               </div>
             </div>
           );
@@ -393,7 +568,7 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
         <div>
           <span className="text-xs text-neutral-400 block">Step 2 Complete</span>
           <span className="text-sm font-semibold text-neutral-200">
-            {glyphs.length} characters tagged. Next: configure font standards & missing lowercase.
+            {glyphs.length} characters reviewed. Next: configure font standards & missing lowercase.
           </span>
         </div>
         <button
@@ -405,6 +580,36 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
           <ArrowRight className="w-4 h-4" />
         </button>
       </div>
+
+      {/* Glyph Crop & Cutout Review Modal */}
+      {cropModalOpen && currentCropGlyph && (
+        <GlyphCropModal
+          isOpen={cropModalOpen}
+          glyph={currentCropGlyph}
+          glyphIndex={cropGlyphIndex}
+          totalGlyphs={glyphs.length}
+          cleanedCanvas={cleanedCanvas}
+          colorCanvas={colorCanvas}
+          sourceCanvas={sourceCanvas}
+          binaryMask={binaryMask}
+          maskWidth={maskWidth}
+          maskHeight={maskHeight}
+          smoothing={smoothing}
+          onSaveGlyph={onSaveGlyph}
+          onSplitGlyph={onSplitGlyph}
+          onNextGlyph={() => {
+            if (cropGlyphIndex < glyphs.length - 1) {
+              setCropGlyphIndex(cropGlyphIndex + 1);
+            }
+          }}
+          onPrevGlyph={() => {
+            if (cropGlyphIndex > 0) {
+              setCropGlyphIndex(cropGlyphIndex - 1);
+            }
+          }}
+          onClose={() => setCropModalOpen(false)}
+        />
+      )}
     </div>
   );
 };

@@ -18,6 +18,12 @@ export const SAMPLE_PRESETS: SamplePreset[] = [
     style: "cultural",
   },
   {
+    id: "dualcase",
+    name: "Dual-Case Alphabet (A-Z & a-z & 0-9)",
+    description: "Complete handwriting sheet with distinct uppercase capitals, lowercase ascenders/descenders, and numbers.",
+    style: "dualcase",
+  },
+  {
     id: "handwritten",
     name: "Handmade Marker Caps & Digits",
     description: "Casual hand-drawn uppercase alphabet, numbers, and symbols on clean white paper.",
@@ -44,17 +50,28 @@ export function generateSampleSheet(presetId: string): string {
   const ctx = canvas.getContext("2d");
   if (!ctx) return "";
 
-  // 1. Crisp white background (as user described: "It's just an image file and I designed it. It has a white background.")
+  // 1. Crisp white background
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const rows = [
-    ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"],
-    ["K", "L", "M", "N", "O", "P", "Q", "R", "S", "T"],
-    ["U", "V", "W", "X", "Y", "Z", "0", "1", "2", "3"],
-    ["4", "5", "6", "7", "8", "9", "!", "?", "&", "#"],
-    ["$", "%", "*", "+", "-", "=", ".", ",", ":", ";"],
-  ];
+  let rows: string[][];
+  if (presetId === "dualcase") {
+    rows = [
+      ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M"],
+      ["N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"],
+      ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m"],
+      ["n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"],
+      ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "!", "?", "."],
+    ];
+  } else {
+    rows = [
+      ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"],
+      ["K", "L", "M", "N", "O", "P", "Q", "R", "S", "T"],
+      ["U", "V", "W", "X", "Y", "Z", "0", "1", "2", "3"],
+      ["4", "5", "6", "7", "8", "9", "!", "?", "&", "#"],
+      ["$", "%", "*", "+", "-", "=", ".", ",", ":", ";"],
+    ];
+  }
 
   const culturalPalettes = [
     ["#d97706", "#b45309", "#92400e"], // Warm gold / ochre
@@ -70,6 +87,8 @@ export function generateSampleSheet(presetId: string): string {
     ctx.font = "bold 68px 'Georgia', serif";
   } else if (presetId === "cultural") {
     ctx.font = "900 68px 'Arial Black', 'Impact', sans-serif";
+  } else if (presetId === "dualcase") {
+    ctx.font = "bold 52px 'Comic Sans MS', 'Trebuchet MS', cursive, sans-serif";
   } else {
     // Casual handwritten style
     ctx.font = "bold 66px 'Comic Sans MS', 'Trebuchet MS', 'Chalkboard SE', cursive, sans-serif";
@@ -78,10 +97,11 @@ export function generateSampleSheet(presetId: string): string {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  const startY = 120;
-  const rowHeight = 135;
-  const colWidth = 115;
-  const startX = 80;
+  const isDual = presetId === "dualcase";
+  const startY = isDual ? 90 : 120;
+  const rowHeight = isDual ? 135 : 135;
+  const colWidth = isDual ? 86 : 115;
+  const startX = isDual ? 60 : 80;
 
   rows.forEach((row, rowIndex) => {
     const y = startY + rowIndex * rowHeight;
@@ -113,7 +133,7 @@ export function generateSampleSheet(presetId: string): string {
         ctx.restore();
 
         ctx.restore();
-      } else if (presetId === "handwritten") {
+      } else if (presetId === "handwritten" || presetId === "dualcase") {
         ctx.fillStyle = "#0f172a";
         ctx.save();
         const angle = ((colIndex * 13 + rowIndex * 7) % 9 - 4) * 0.015;

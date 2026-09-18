@@ -164,9 +164,9 @@ export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
                     whiteThreshold: 235,
                     contrast: 1.3,
                     invert: false,
-                    minGlyphArea: 60,
-                    mergeDistance: 24,
-                    smoothing: 1.8,
+                    minGlyphArea: 50,
+                    mergeDistance: 14,
+                    smoothing: 1.6,
                   })
                 }
                 title="Reset to defaults"
@@ -252,9 +252,9 @@ export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
               <input
                 id="slider-merge-distance"
                 type="range"
-                min="10"
-                max="60"
-                step="2"
+                min="4"
+                max="40"
+                step="1"
                 value={settings.mergeDistance}
                 onChange={(e) =>
                   onUpdateSettings({ mergeDistance: parseInt(e.target.value, 10) })
@@ -262,7 +262,7 @@ export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
                 className="w-full accent-amber-500 bg-neutral-700 rounded-lg h-2 cursor-pointer"
               />
               <p className="text-[11px] text-neutral-400">
-                Combines disconnected dots into single characters (e.g. i, j, :, !, ?).
+                Combines vertical dots (e.g. i, j, :, !, ?) without merging adjacent horizontal characters.
               </p>
             </div>
 
