@@ -9,8 +9,10 @@ import {
   Eye,
   Layers,
   ArrowRight,
+  AlertTriangle,
+  Info,
 } from "lucide-react";
-import { ImageProcessingSettings } from "../types";
+import { ImageProcessingSettings, SheetQualityAssessment } from "../types";
 import { SAMPLE_PRESETS } from "../utils/sampleSheets";
 
 interface UploadAndCutoutProps {
@@ -18,6 +20,7 @@ interface UploadAndCutoutProps {
   cleanedCanvasDataUrl: string | null;
   colorCanvasDataUrl?: string | null;
   detectedCount: number;
+  qualityAssessment?: SheetQualityAssessment | null;
   settings: ImageProcessingSettings;
   onUpdateSettings: (settings: Partial<ImageProcessingSettings>) => void;
   onUploadImage: (file: File) => void;
@@ -34,6 +37,7 @@ export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
   cleanedCanvasDataUrl,
   colorCanvasDataUrl,
   detectedCount,
+  qualityAssessment,
   settings,
   onUpdateSettings,
   onUploadImage,
@@ -89,6 +93,65 @@ export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
           </p>
         </div>
       </div>
+
+      {/* Quality Check / Image Suitability Warning Banner */}
+      {sourceImageUrl && qualityAssessment && qualityAssessment.isLikelyPhoto && (
+        <div
+          id="banner-photo-detected-warning"
+          className="rounded-2xl border border-red-500/40 bg-red-950/40 p-5 shadow-xl text-neutral-100 space-y-3 animate-in fade-in"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center text-red-400 shrink-0 mt-0.5">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div className="space-y-1 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-bold text-red-300">
+                  Non-Character Image or Complex Photo Detected
+                </h3>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-red-500/20 text-red-300 border border-red-500/30">
+                  {Math.round(qualityAssessment.inkCoverageRatio * 100)}% Foreground Density
+                </span>
+              </div>
+              <p className="text-xs text-neutral-300 leading-relaxed">
+                {qualityAssessment.recommendation}
+              </p>
+              {qualityAssessment.warnings.length > 0 && (
+                <ul className="list-disc list-inside text-[11px] text-red-200/90 space-y-0.5 pt-1">
+                  {qualityAssessment.warnings.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {onClearImage && (
+              <button
+                type="button"
+                onClick={onClearImage}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/30 transition shrink-0"
+              >
+                Clear & Re-upload
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Notice for successful clean sheet */}
+      {sourceImageUrl && qualityAssessment && !qualityAssessment.isLikelyPhoto && qualityAssessment.warnings.length === 0 && (
+        <div
+          id="banner-clean-sheet-detected"
+          className="rounded-xl border border-emerald-500/30 bg-emerald-950/30 px-4 py-2.5 shadow-sm text-neutral-200 flex items-center justify-between gap-3 text-xs animate-in fade-in"
+        >
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span className="font-semibold text-emerald-300">Proper character sheet verified:</span>
+            <span className="text-neutral-300">
+              Clean background ({Math.round((1 - qualityAssessment.inkCoverageRatio) * 100)}% white paper) and well-spaced glyph boundaries.
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left Column: Upload & Parameters Controls (4 cols) */}

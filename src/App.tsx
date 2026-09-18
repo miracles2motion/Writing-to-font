@@ -9,12 +9,14 @@ import {
   DetectedGlyph,
   FontSettings,
   ImageProcessingSettings,
+  SheetQualityAssessment,
   StudioTab,
 } from "./types";
 import { generateSampleSheet } from "./utils/sampleSheets";
 import {
   removeBackgroundAndBinarize,
   segmentGlyphs,
+  evaluateSheetQuality,
   ProcessedImageResult,
 } from "./utils/imageProcessor";
 import { extractGlyphContours } from "./utils/vectorizer";
@@ -54,6 +56,7 @@ export default function App() {
   const [cleanedCanvasDataUrl, setCleanedCanvasDataUrl] = useState<string | null>(null);
   const [colorCanvasDataUrl, setColorCanvasDataUrl] = useState<string | null>(null);
   const [processedResult, setProcessedResult] = useState<ProcessedImageResult | null>(null);
+  const [qualityAssessment, setQualityAssessment] = useState<SheetQualityAssessment | null>(null);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [isGeneratingColorPack, setIsGeneratingColorPack] = useState(false);
 
@@ -206,6 +209,16 @@ export default function App() {
           settings
         );
 
+        // Quality check: evaluate image characteristics against expected font sheet specifications
+        const quality = evaluateSheetQuality(
+          result.binaryMask,
+          result.width,
+          result.height,
+          detected.length
+        );
+        result.quality = quality;
+        setQualityAssessment(quality);
+
         // Step 3: Extract vector contours for each glyph
         if (showOverlay) {
           setProcessingState((prev) => ({
@@ -263,7 +276,11 @@ export default function App() {
           setProcessingState((prev) => ({ ...prev, isOpen: false }));
         }
 
-        showToast(`Isolated ${glyphsWithContours.length} glyphs with transparent background`);
+        if (quality.isLikelyPhoto) {
+          showToast(`Warning: High ink density (${Math.round(quality.inkCoverageRatio * 100)}%). This image looks like a photo/scene.`);
+        } else {
+          showToast(`Isolated ${glyphsWithContours.length} glyphs with transparent background`);
+        }
       } catch (err: any) {
         console.error("Error processing image:", err);
         setProcessingState((prev) => ({ ...prev, isOpen: false }));
@@ -281,6 +298,7 @@ export default function App() {
     setSourceImageElement(null);
     setGlyphs([]);
     setProcessedResult(null);
+    setQualityAssessment(null);
     setCleanedCanvasDataUrl(null);
     setColorCanvasDataUrl(null);
     setCompiledFontResult(null);
@@ -770,6 +788,7 @@ export default function App() {
             cleanedCanvasDataUrl={cleanedCanvasDataUrl}
             colorCanvasDataUrl={colorCanvasDataUrl}
             detectedCount={glyphs.length}
+            qualityAssessment={qualityAssessment}
             settings={imageSettings}
             onUpdateSettings={handleUpdateImageSettings}
             onUploadImage={handleUploadImage}

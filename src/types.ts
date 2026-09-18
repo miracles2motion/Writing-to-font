@@ -27,6 +27,16 @@ export interface Point {
   y: number;
 }
 
+export interface SheetQualityAssessment {
+  isValidSheet: boolean;
+  isLikelyPhoto: boolean;
+  inkCoverageRatio: number; // 0 to 1, % of image that turned into foreground ink
+  edgeTouchingInkRatio: number; // 0 to 1, % of border perimeter covered in ink
+  glyphCount: number;
+  warnings: string[];
+  recommendation: string;
+}
+
 export interface ImageProcessingSettings {
   whiteThreshold: number; // 0-255, pixels brighter than this become transparent
   contrast: number; // 1.0 - 2.5

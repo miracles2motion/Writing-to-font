@@ -1,4 +1,4 @@
-import { BoundingBox, DetectedGlyph, ImageProcessingSettings } from "../types";
+import { BoundingBox, DetectedGlyph, ImageProcessingSettings, SheetQualityAssessment } from "../types";
 
 export interface ProcessedImageResult {
   cleanedCanvas: HTMLCanvasElement;
@@ -6,6 +6,95 @@ export interface ProcessedImageResult {
   binaryMask: Uint8Array;
   width: number;
   height: number;
+  quality?: SheetQualityAssessment;
+}
+
+/**
+ * Analyzes binary mask and detected regions to check if the uploaded image
+ * is a valid character/alphabet sheet rather than a natural photo, cluttered scene,
+ * or full-bleed image of people.
+ */
+export function evaluateSheetQuality(
+  binaryMask: Uint8Array,
+  width: number,
+  height: number,
+  glyphCount: number
+): SheetQualityAssessment {
+  const totalPixels = width * height;
+  let inkPixels = 0;
+  let edgeInkPixels = 0;
+  const edgeMargin = Math.max(2, Math.min(8, Math.floor(Math.min(width, height) * 0.015)));
+
+  for (let y = 0; y < height; y++) {
+    const isTopOrBottom = y < edgeMargin || y >= height - edgeMargin;
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      if (binaryMask[idx] === 1) {
+        inkPixels++;
+        if (isTopOrBottom || x < edgeMargin || x >= width - edgeMargin) {
+          edgeInkPixels++;
+        }
+      }
+    }
+  }
+
+  const inkCoverageRatio = inkPixels / totalPixels;
+  // Border perimeter total pixels
+  const totalBorderPixels = (width * 2 + height * 2) * edgeMargin;
+  const edgeTouchingInkRatio = edgeInkPixels / Math.max(1, totalBorderPixels);
+
+  const warnings: string[] = [];
+  let isLikelyPhoto = false;
+
+  // Real character sheets typically have 2% - 30% ink coverage (vast majority is white/light paper background)
+  // Photos of people, landscapes, or solid graphics typically have > 40% ink coverage
+  if (inkCoverageRatio > 0.45) {
+    isLikelyPhoto = true;
+    warnings.push(
+      `High foreground density (${Math.round(inkCoverageRatio * 100)}% non-white area). Character sheets should be mostly clean light paper.`
+    );
+  } else if (inkCoverageRatio < 0.005) {
+    warnings.push("Very faint or virtually blank image. Almost no ink strokes detected.");
+  }
+
+  // Edge bleeding: Character sheets almost always have clean white margins around the edges
+  // Photos typically bleed all the way to the 4 edges of the image
+  if (edgeTouchingInkRatio > 0.25) {
+    isLikelyPhoto = true;
+    warnings.push(
+      `Dark areas bleed across ${Math.round(edgeTouchingInkRatio * 100)}% of the outer image borders, characteristic of a scene or photograph.`
+    );
+  }
+
+  // Fragment count: Natural photos binarize into hundreds of micro-blobs
+  if (glyphCount > 150) {
+    isLikelyPhoto = true;
+    warnings.push(
+      `Extracted an unusually high count of fragments (${glyphCount}). Real font sheets typically contain 26 to 100 characters.`
+    );
+  } else if (glyphCount === 0) {
+    warnings.push("No distinct character regions detected.");
+  }
+
+  const isValidSheet = !isLikelyPhoto && glyphCount >= 1 && glyphCount <= 120 && inkCoverageRatio <= 0.40;
+
+  let recommendation = "Good character sheet format detected. Clean background and clear isolated glyphs.";
+  if (isLikelyPhoto) {
+    recommendation =
+      "This image appears to be a photo or complex scene rather than a character sheet. For best font creation results, please upload a drawn or printed alphabet/number grid on a plain white or light background.";
+  } else if (warnings.length > 0) {
+    recommendation = "Some background noise or marginal elements detected. You can adjust the White Cutoff Threshold on the left to refine.";
+  }
+
+  return {
+    isValidSheet,
+    isLikelyPhoto,
+    inkCoverageRatio,
+    edgeTouchingInkRatio,
+    glyphCount,
+    warnings,
+    recommendation,
+  };
 }
 
 /**
@@ -170,12 +259,17 @@ export function segmentGlyphs(
         if (pixelCount >= settings.minGlyphArea && area >= settings.minGlyphArea) {
           // Reject full-canvas borders or outer framing artifacts
           if (bWidth < width * 0.95 && bHeight < height * 0.95) {
-            rawBoxes.push({
-              x: minX,
-              y: minY,
-              width: bWidth,
-              height: bHeight,
-            });
+            // Discard blobs that touch the absolute perimeter if they span wide/tall (edge photographic borders/shadows)
+            const touchesBorder = minX <= 1 || minY <= 1 || maxX >= width - 2 || maxY >= height - 2;
+            const isBorderClutter = touchesBorder && (bWidth > width * 0.35 || bHeight > height * 0.35);
+            if (!isBorderClutter) {
+              rawBoxes.push({
+                x: minX,
+                y: minY,
+                width: bWidth,
+                height: bHeight,
+              });
+            }
           }
         }
       }
