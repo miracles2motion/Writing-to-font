@@ -41,6 +41,7 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [activeFilter, setActiveFilter] = useState<"all" | "letters" | "numbers" | "symbols">("all");
   const [editingGlyphId, setEditingGlyphId] = useState<string | null>(null);
+  const [glyphViewMode, setGlyphViewMode] = useState<"color" | "mono">("color");
   const [customCharModalOpen, setCustomCharModalOpen] = useState(false);
   const [newCharInput, setNewCharInput] = useState("");
 
@@ -144,50 +145,78 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
           </div>
         </div>
 
-        {/* Secondary control strip: Filters & Batch operations */}
+        {/* Secondary control strip: Filters, Color Toggle & Batch operations */}
         <div className="pt-3 border-t border-neutral-700/60 flex flex-wrap items-center justify-between gap-3 text-xs">
-          {/* Filters */}
-          <div className="flex items-center gap-1 bg-neutral-900/90 p-1 rounded-xl border border-neutral-750">
-            <button
-              onClick={() => setActiveFilter("all")}
-              className={`px-3 py-1 rounded-lg font-medium transition ${
-                activeFilter === "all"
-                  ? "bg-amber-500 text-neutral-950 font-semibold"
-                  : "text-neutral-400 hover:text-neutral-200"
-              }`}
-            >
-              All ({glyphs.length})
-            </button>
-            <button
-              onClick={() => setActiveFilter("letters")}
-              className={`px-3 py-1 rounded-lg font-medium transition ${
-                activeFilter === "letters"
-                  ? "bg-amber-500 text-neutral-950 font-semibold"
-                  : "text-neutral-400 hover:text-neutral-200"
-              }`}
-            >
-              Letters
-            </button>
-            <button
-              onClick={() => setActiveFilter("numbers")}
-              className={`px-3 py-1 rounded-lg font-medium transition ${
-                activeFilter === "numbers"
-                  ? "bg-amber-500 text-neutral-950 font-semibold"
-                  : "text-neutral-400 hover:text-neutral-200"
-              }`}
-            >
-              Numbers
-            </button>
-            <button
-              onClick={() => setActiveFilter("symbols")}
-              className={`px-3 py-1 rounded-lg font-medium transition ${
-                activeFilter === "symbols"
-                  ? "bg-amber-500 text-neutral-950 font-semibold"
-                  : "text-neutral-400 hover:text-neutral-200"
-              }`}
-            >
-              Symbols
-            </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Filters */}
+            <div className="flex items-center gap-1 bg-neutral-900/90 p-1 rounded-xl border border-neutral-750">
+              <button
+                onClick={() => setActiveFilter("all")}
+                className={`px-3 py-1 rounded-lg font-medium transition ${
+                  activeFilter === "all"
+                    ? "bg-amber-500 text-neutral-950 font-semibold"
+                    : "text-neutral-400 hover:text-neutral-200"
+                }`}
+              >
+                All ({glyphs.length})
+              </button>
+              <button
+                onClick={() => setActiveFilter("letters")}
+                className={`px-3 py-1 rounded-lg font-medium transition ${
+                  activeFilter === "letters"
+                    ? "bg-amber-500 text-neutral-950 font-semibold"
+                    : "text-neutral-400 hover:text-neutral-200"
+                }`}
+              >
+                Letters
+              </button>
+              <button
+                onClick={() => setActiveFilter("numbers")}
+                className={`px-3 py-1 rounded-lg font-medium transition ${
+                  activeFilter === "numbers"
+                    ? "bg-amber-500 text-neutral-950 font-semibold"
+                    : "text-neutral-400 hover:text-neutral-200"
+                }`}
+              >
+                Numbers
+              </button>
+              <button
+                onClick={() => setActiveFilter("symbols")}
+                className={`px-3 py-1 rounded-lg font-medium transition ${
+                  activeFilter === "symbols"
+                    ? "bg-amber-500 text-neutral-950 font-semibold"
+                    : "text-neutral-400 hover:text-neutral-200"
+                }`}
+              >
+                Symbols
+              </button>
+            </div>
+
+            {/* Cultural Color vs Monochrome View Mode Toggle */}
+            <div className="flex items-center gap-1 bg-neutral-900/90 p-1 rounded-xl border border-neutral-750">
+              <button
+                id="btn-glyph-view-color"
+                onClick={() => setGlyphViewMode("color")}
+                className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                  glyphViewMode === "color"
+                    ? "bg-amber-500 text-neutral-950 font-semibold shadow-sm"
+                    : "text-neutral-400 hover:text-neutral-200"
+                }`}
+              >
+                Cultural Colors
+              </button>
+              <button
+                id="btn-glyph-view-mono"
+                onClick={() => setGlyphViewMode("mono")}
+                className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                  glyphViewMode === "mono"
+                    ? "bg-amber-500 text-neutral-950 font-semibold shadow-sm"
+                    : "text-neutral-400 hover:text-neutral-200"
+                }`}
+              >
+                Monochrome
+              </button>
+            </div>
           </div>
 
           {/* Batch Merge / Delete */}
@@ -283,7 +312,19 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
                   backgroundColor: "#0d0d12",
                 }}
               >
-                {glyph.canvasDataUrl ? (
+                {glyphViewMode === "color" ? (
+                  (glyph.colorCanvasDataUrl || glyph.canvasDataUrl) ? (
+                    <img
+                      src={glyph.colorCanvasDataUrl || glyph.canvasDataUrl}
+                      alt={`Cultural glyph ${glyph.char}`}
+                      className="max-h-16 max-w-16 object-contain drop-shadow"
+                    />
+                  ) : (
+                    <span className="text-xl font-bold font-mono text-neutral-400">
+                      {glyph.char}
+                    </span>
+                  )
+                ) : glyph.canvasDataUrl ? (
                   <img
                     src={glyph.canvasDataUrl}
                     alt={`Glyph ${glyph.char}`}

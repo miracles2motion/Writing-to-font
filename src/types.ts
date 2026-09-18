@@ -11,7 +11,8 @@ export interface DetectedGlyph {
   unicode: number;
   bbox: BoundingBox;
   confidence?: number;
-  canvasDataUrl?: string;
+  canvasDataUrl?: string; // Monochrome/silhouette for vectorization
+  colorCanvasDataUrl?: string; // High-resolution cutout preserving real cultural surface colors & patterns
   isSynthesized?: boolean;
   baselineOffset?: number;
   advanceWidth?: number;

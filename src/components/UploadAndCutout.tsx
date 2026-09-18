@@ -16,6 +16,7 @@ import { SAMPLE_PRESETS } from "../utils/sampleSheets";
 interface UploadAndCutoutProps {
   sourceImageUrl: string | null;
   cleanedCanvasDataUrl: string | null;
+  colorCanvasDataUrl?: string | null;
   detectedCount: number;
   settings: ImageProcessingSettings;
   onUpdateSettings: (settings: Partial<ImageProcessingSettings>) => void;
@@ -28,6 +29,7 @@ interface UploadAndCutoutProps {
 export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
   sourceImageUrl,
   cleanedCanvasDataUrl,
+  colorCanvasDataUrl,
   detectedCount,
   settings,
   onUpdateSettings,
@@ -38,7 +40,7 @@ export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [viewMode, setViewMode] = useState<"cutout" | "original" | "split">("cutout");
+  const [viewMode, setViewMode] = useState<"cultural-color" | "cutout" | "original">("cultural-color");
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -327,28 +329,39 @@ export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
               </div>
 
               {/* View toggle */}
-              <div className="flex items-center bg-neutral-900/80 p-1 rounded-xl border border-neutral-700/70 text-xs">
+              <div className="flex items-center bg-neutral-900/80 p-1 rounded-xl border border-neutral-700/70 text-xs gap-1">
+                <button
+                  id="btn-view-cultural-color"
+                  onClick={() => setViewMode("cultural-color")}
+                  className={`px-3 py-1 rounded-lg transition font-medium ${
+                    viewMode === "cultural-color"
+                      ? "bg-amber-500 text-neutral-950 font-semibold shadow-sm"
+                      : "text-neutral-400 hover:text-neutral-200"
+                  }`}
+                >
+                  Cultural Surface (Real Color)
+                </button>
                 <button
                   id="btn-view-cutout"
                   onClick={() => setViewMode("cutout")}
                   className={`px-3 py-1 rounded-lg transition font-medium ${
                     viewMode === "cutout"
-                      ? "bg-amber-500 text-neutral-950 font-semibold"
+                      ? "bg-amber-500 text-neutral-950 font-semibold shadow-sm"
                       : "text-neutral-400 hover:text-neutral-200"
                   }`}
                 >
-                  Clean Cutout (Alpha)
+                  Monochrome Cutout
                 </button>
                 <button
                   id="btn-view-original"
                   onClick={() => setViewMode("original")}
                   className={`px-3 py-1 rounded-lg transition font-medium ${
                     viewMode === "original"
-                      ? "bg-amber-500 text-neutral-950 font-semibold"
+                      ? "bg-amber-500 text-neutral-950 font-semibold shadow-sm"
                       : "text-neutral-400 hover:text-neutral-200"
                   }`}
                 >
-                  Original Image
+                  Original Input
                 </button>
               </div>
             </div>
@@ -365,8 +378,31 @@ export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
               ) : sourceImageUrl ? (
                 <div className="w-full flex flex-col items-center justify-center">
                   <div className="relative max-w-full rounded-xl overflow-hidden border border-neutral-700/80 shadow-2xl">
-                    {viewMode === "cutout" ? (
-                      /* Checkerboard transparency background */
+                    {viewMode === "cultural-color" ? (
+                      /* Checkerboard transparency background with real cultural colors */
+                      <div
+                        className="p-4 flex items-center justify-center"
+                        style={{
+                          backgroundImage: `
+                            linear-gradient(45deg, #1c1c24 25%, transparent 25%),
+                            linear-gradient(-45deg, #1c1c24 25%, transparent 25%),
+                            linear-gradient(45deg, transparent 75%, #1c1c24 75%),
+                            linear-gradient(-45deg, transparent 75%, #1c1c24 75%)
+                          `,
+                          backgroundSize: "20px 20px",
+                          backgroundColor: "#121217",
+                        }}
+                      >
+                        {(colorCanvasDataUrl || cleanedCanvasDataUrl) ? (
+                          <img
+                            src={colorCanvasDataUrl || cleanedCanvasDataUrl || ""}
+                            alt="Authentic Cultural Colors with Background Removed"
+                            className="max-h-[500px] w-auto object-contain rounded drop-shadow"
+                          />
+                        ) : null}
+                      </div>
+                    ) : viewMode === "cutout" ? (
+                      /* Checkerboard transparency background with monochrome ink */
                       <div
                         className="p-4 flex items-center justify-center"
                         style={{

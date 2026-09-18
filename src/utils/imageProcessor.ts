@@ -2,6 +2,7 @@ import { BoundingBox, DetectedGlyph, ImageProcessingSettings } from "../types";
 
 export interface ProcessedImageResult {
   cleanedCanvas: HTMLCanvasElement;
+  colorCanvas: HTMLCanvasElement;
   binaryMask: Uint8Array;
   width: number;
   height: number;
@@ -9,6 +10,9 @@ export interface ProcessedImageResult {
 
 /**
  * Removes white background from image and builds binary mask of ink glyphs.
+ * Preserves both:
+ * 1. cleanedCanvas: high-contrast monochrome ink for vectorization
+ * 2. colorCanvas: 100% original full-color cultural surface & textures on transparent background
  */
 export function removeBackgroundAndBinarize(
   sourceImage: HTMLImageElement | HTMLCanvasElement,
@@ -17,28 +21,39 @@ export function removeBackgroundAndBinarize(
   const width = sourceImage.width;
   const height = sourceImage.height;
 
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) {
-    throw new Error("Could not create 2D canvas context");
-  }
+  // Canvas 1: Cleaned monochrome canvas for vector contour tracing
+  const monoCanvas = document.createElement("canvas");
+  monoCanvas.width = width;
+  monoCanvas.height = height;
+  const monoCtx = monoCanvas.getContext("2d", { willReadFrequently: true });
+  if (!monoCtx) throw new Error("Could not create 2D canvas context");
 
-  ctx.drawImage(sourceImage, 0, 0);
-  const imgData = ctx.getImageData(0, 0, width, height);
-  const data = imgData.data;
+  // Canvas 2: Full-color cultural canvas preserving authentic artwork and textures
+  const colorCanvas = document.createElement("canvas");
+  colorCanvas.width = width;
+  colorCanvas.height = height;
+  const colorCtx = colorCanvas.getContext("2d", { willReadFrequently: true });
+  if (!colorCtx) throw new Error("Could not create color canvas context");
+
+  monoCtx.drawImage(sourceImage, 0, 0);
+  colorCtx.drawImage(sourceImage, 0, 0);
+
+  const monoImgData = monoCtx.getImageData(0, 0, width, height);
+  const monoData = monoImgData.data;
+
+  const colorImgData = colorCtx.getImageData(0, 0, width, height);
+  const colorData = colorImgData.data;
 
   const binaryMask = new Uint8Array(width * height);
   const threshold = settings.whiteThreshold;
   const contrastFactor = settings.contrast;
 
-  for (let i = 0; i < data.length; i += 4) {
-    let r = data[i];
-    let g = data[i + 1];
-    let b = data[i + 2];
+  for (let i = 0; i < monoData.length; i += 4) {
+    let r = monoData[i];
+    let g = monoData[i + 1];
+    let b = monoData[i + 2];
 
-    // Apply contrast
+    // Apply contrast for threshold calculation
     if (contrastFactor !== 1.0) {
       r = Math.min(255, Math.max(0, (r - 128) * contrastFactor + 128));
       g = Math.min(255, Math.max(0, (g - 128) * contrastFactor + 128));
@@ -56,22 +71,28 @@ export function removeBackgroundAndBinarize(
     const pixelIndex = i / 4;
     if (isInk) {
       binaryMask[pixelIndex] = 1;
-      // High-contrast clean ink on transparent background
-      data[i] = 15; // Dark slate ink
-      data[i + 1] = 23;
-      data[i + 2] = 42;
-      data[i + 3] = 255;
+      // Monochrome canvas: clean slate for vector tracing
+      monoData[i] = 15;
+      monoData[i + 1] = 23;
+      monoData[i + 2] = 42;
+      monoData[i + 3] = 255;
+
+      // Color canvas: KEEP authentic original colors and textures, ensure full opacity
+      colorData[i + 3] = 255;
     } else {
       binaryMask[pixelIndex] = 0;
-      // Transparent background
-      data[i + 3] = 0;
+      // Both canvases get transparent background
+      monoData[i + 3] = 0;
+      colorData[i + 3] = 0;
     }
   }
 
-  ctx.putImageData(imgData, 0, 0);
+  monoCtx.putImageData(monoImgData, 0, 0);
+  colorCtx.putImageData(colorImgData, 0, 0);
 
   return {
-    cleanedCanvas: canvas,
+    cleanedCanvas: monoCanvas,
+    colorCanvas,
     binaryMask,
     width,
     height,
@@ -86,6 +107,7 @@ export function segmentGlyphs(
   width: number,
   height: number,
   cleanedCanvas: HTMLCanvasElement,
+  colorCanvas: HTMLCanvasElement,
   settings: ImageProcessingSettings
 ): DetectedGlyph[] {
   const visited = new Uint8Array(width * height);
@@ -274,7 +296,7 @@ export function segmentGlyphs(
       index < defaultSequence.length ? defaultSequence[index] : `?`;
     const unicode = char.charCodeAt(0);
 
-    // Extract cropped preview
+    // Extract cropped monochrome preview
     const cropCanvas = document.createElement("canvas");
     const pad = 4;
     cropCanvas.width = bbox.width + pad * 2;
@@ -294,12 +316,32 @@ export function segmentGlyphs(
       );
     }
 
+    // Extract cropped full-color cultural preview (with authentic colors, textures & transparent bg)
+    const colorCropCanvas = document.createElement("canvas");
+    colorCropCanvas.width = bbox.width + pad * 2;
+    colorCropCanvas.height = bbox.height + pad * 2;
+    const colorCropCtx = colorCropCanvas.getContext("2d");
+    if (colorCropCtx) {
+      colorCropCtx.drawImage(
+        colorCanvas,
+        bbox.x,
+        bbox.y,
+        bbox.width,
+        bbox.height,
+        pad,
+        pad,
+        bbox.width,
+        bbox.height
+      );
+    }
+
     return {
       id: `glyph-${index}-${char}-${Date.now()}`,
       char,
       unicode,
       bbox,
       canvasDataUrl: cropCanvas.toDataURL("image/png"),
+      colorCanvasDataUrl: colorCropCanvas.toDataURL("image/png"),
       advanceWidth: Math.round(bbox.width * 1.25),
       leftBearing: 20,
       rightBearing: 20,

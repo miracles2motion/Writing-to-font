@@ -17,6 +17,7 @@ interface HeaderProps {
   glyphCount: number;
   hasCompiledFont: boolean;
   onDownloadFont: () => void;
+  onDownloadColorPack?: () => void;
   onGenerateFont: () => void;
   isGenerating: boolean;
 }
@@ -28,6 +29,7 @@ export const Header: React.FC<HeaderProps> = ({
   glyphCount,
   hasCompiledFont,
   onDownloadFont,
+  onDownloadColorPack,
   onGenerateFont,
   isGenerating,
 }) => {
@@ -118,6 +120,19 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2 shrink-0">
+          {onDownloadColorPack && (
+            <button
+              id="btn-quick-download-color-pack"
+              onClick={onDownloadColorPack}
+              disabled={glyphCount === 0}
+              title="Download Real Cultural Color Pack (ZIP)"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 active:scale-95 text-amber-300 border border-amber-500/30 transition disabled:opacity-40"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Cultural ZIP</span>
+            </button>
+          )}
+
           <button
             id="btn-quick-generate-font"
             onClick={onGenerateFont}

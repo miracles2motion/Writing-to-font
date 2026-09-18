@@ -35,8 +35,13 @@ Upload an image containing letters, numbers, and symbols on a white background. 
   - Interactive multi-size specimen waterfall (16px to 72px).
   - Built-in classic pangrams and editable text canvas.
 
+- **Dual Export Editions (Cultural Color & Standard Font)**:
+  - **Authentic Cultural Color Character Asset Pack (`.ZIP`)**: Preserves the original individual cultural background colors, surface patterns, and textures designed onto each character with transparent backgrounds. Includes high-resolution transparent PNGs for every character (`A.png`, `B.png`...), SVG wrappers, a consolidated transparent character sheet, metadata `manifest.json`, and an HTML web gallery preview.
+  - **Cultural Color Art Typesetter**: Interactive canvas where you can type any words or sentences and render them live using the authentic colorful cultural characters, with custom spacing, sizing, backgrounds, and instant high-res PNG artwork download.
+  - **Standard TrueType Vector Font (`.ttf`)**: Compiled single-color scalable vector font installable into Windows, macOS, Figma, Photoshop, Illustrator, and Microsoft Word.
+
 - **One-Click Export**:
-  - Direct download of the compiled `.ttf` file.
+  - Direct download of both the `.ttf` TrueType font file and the Full-Color Cultural Asset Pack (`.zip`).
   - Ready-to-use CSS `@font-face` code snippet for web embedding.
   - Desktop installation instructions for Windows, macOS, Figma, Photoshop, Illustrator, and Word.
 

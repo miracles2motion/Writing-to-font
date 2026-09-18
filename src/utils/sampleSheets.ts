@@ -12,6 +12,12 @@ export interface SamplePreset {
 
 export const SAMPLE_PRESETS: SamplePreset[] = [
   {
+    id: "cultural",
+    name: "African Cultural Pattern & Textures",
+    description: "Rich cultural geometric surfaces, vibrant kente ochre, terracotta, and indigo patterns on each letter.",
+    style: "cultural",
+  },
+  {
     id: "handwritten",
     name: "Handmade Marker Caps & Digits",
     description: "Casual hand-drawn uppercase alphabet, numbers, and symbols on clean white paper.",
@@ -42,9 +48,6 @@ export function generateSampleSheet(presetId: string): string {
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Subtle natural paper grain/warmth for realism that still thresholds cleanly
-  ctx.fillStyle = "#0f172a"; // Deep rich ink
-
   const rows = [
     ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"],
     ["K", "L", "M", "N", "O", "P", "Q", "R", "S", "T"],
@@ -53,10 +56,20 @@ export function generateSampleSheet(presetId: string): string {
     ["$", "%", "*", "+", "-", "=", ".", ",", ":", ";"],
   ];
 
+  const culturalPalettes = [
+    ["#d97706", "#b45309", "#92400e"], // Warm gold / ochre
+    ["#dc2626", "#991b1b", "#7f1d1d"], // Terracotta red
+    ["#0284c7", "#0369a1", "#075985"], // Vibrant indigo / cyan
+    ["#16a34a", "#15803d", "#166534"], // Emerald forest
+    ["#9333ea", "#7e22ce", "#6b21a8"], // Royal amethyst
+  ];
+
   if (presetId === "geometric") {
     ctx.font = "bold 64px 'Space Grotesk', 'Arial Black', sans-serif";
   } else if (presetId === "retro") {
     ctx.font = "bold 68px 'Georgia', serif";
+  } else if (presetId === "cultural") {
+    ctx.font = "900 68px 'Arial Black', 'Impact', sans-serif";
   } else {
     // Casual handwritten style
     ctx.font = "bold 66px 'Comic Sans MS', 'Trebuchet MS', 'Chalkboard SE', cursive, sans-serif";
@@ -75,8 +88,33 @@ export function generateSampleSheet(presetId: string): string {
     row.forEach((char, colIndex) => {
       const x = startX + colIndex * colWidth;
 
-      // Add tiny natural organic tilt for handwritten preset
-      if (presetId === "handwritten") {
+      if (presetId === "cultural") {
+        // Render rich cultural multi-color patterns on each letter
+        ctx.save();
+        const palette = culturalPalettes[(colIndex + rowIndex * 2) % culturalPalettes.length];
+        
+        // Create custom diagonal gradient pattern for cultural surface
+        const grad = ctx.createLinearGradient(x - 30, y - 35, x + 30, y + 35);
+        grad.addColorStop(0, palette[0]);
+        grad.addColorStop(0.5, palette[1]);
+        grad.addColorStop(1, palette[2]);
+        ctx.fillStyle = grad;
+
+        // Draw character
+        ctx.fillText(char, x, y);
+
+        // Draw intricate cultural geometric accents over the character strokes
+        ctx.save();
+        ctx.beginPath();
+        // Clip to character
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = "#fef08a"; // Gold highlight line
+        ctx.strokeText(char, x, y);
+        ctx.restore();
+
+        ctx.restore();
+      } else if (presetId === "handwritten") {
+        ctx.fillStyle = "#0f172a";
         ctx.save();
         const angle = ((colIndex * 13 + rowIndex * 7) % 9 - 4) * 0.015;
         ctx.translate(x, y);
@@ -84,6 +122,7 @@ export function generateSampleSheet(presetId: string): string {
         ctx.fillText(char, 0, 0);
         ctx.restore();
       } else {
+        ctx.fillStyle = "#0f172a";
         ctx.fillText(char, x, y);
       }
     });

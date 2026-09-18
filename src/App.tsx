@@ -23,6 +23,7 @@ import {
   applyDynamicFontFace,
   FontBuildResult,
 } from "./utils/fontBuilder";
+import { downloadColorAssetPackZip } from "./utils/colorAssetExporter";
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<StudioTab>("upload");
@@ -31,8 +32,10 @@ export default function App() {
   const [sourceImageUrl, setSourceImageUrl] = useState<string | null>(null);
   const [sourceImageElement, setSourceImageElement] = useState<HTMLImageElement | null>(null);
   const [cleanedCanvasDataUrl, setCleanedCanvasDataUrl] = useState<string | null>(null);
+  const [colorCanvasDataUrl, setColorCanvasDataUrl] = useState<string | null>(null);
   const [processedResult, setProcessedResult] = useState<ProcessedImageResult | null>(null);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [isGeneratingColorPack, setIsGeneratingColorPack] = useState(false);
 
   // Settings
   const [imageSettings, setImageSettings] = useState<ImageProcessingSettings>({
@@ -45,8 +48,8 @@ export default function App() {
   });
 
   const [fontSettings, setFontSettings] = useState<FontSettings>({
-    name: "Handmade Marker",
-    family: "HandmadeMarker",
+    name: "Cultural Heritage",
+    family: "CulturalHeritage",
     styleName: "Regular",
     unitsPerEm: 1000,
     ascender: 800,
@@ -81,10 +84,11 @@ export default function App() {
     async (img: HTMLImageElement, settings: ImageProcessingSettings) => {
       setIsProcessingImage(true);
       try {
-        // 1. Remove white background and build binary mask
+        // 1. Remove white background and build binary mask & color cutout canvas
         const result = removeBackgroundAndBinarize(img, settings);
         setProcessedResult(result);
         setCleanedCanvasDataUrl(result.cleanedCanvas.toDataURL("image/png"));
+        setColorCanvasDataUrl(result.colorCanvas.toDataURL("image/png"));
 
         // 2. Segment connected components into glyph bounding boxes
         const detected = segmentGlyphs(
@@ -92,6 +96,7 @@ export default function App() {
           result.width,
           result.height,
           result.cleanedCanvas,
+          result.colorCanvas,
           settings
         );
 
@@ -132,7 +137,7 @@ export default function App() {
 
   // Load a sample preset on startup
   useEffect(() => {
-    const dataUrl = generateSampleSheet("handwritten");
+    const dataUrl = generateSampleSheet("cultural");
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
@@ -266,6 +271,25 @@ export default function App() {
     showToast(`Downloading ${fileName}...`);
   };
 
+  // Download Cultural Color Asset Pack (ZIP)
+  const handleDownloadColorAssetPack = useCallback(async () => {
+    if (glyphs.length === 0) {
+      showToast("No glyphs detected to export.");
+      return;
+    }
+    setIsGeneratingColorPack(true);
+    showToast("Packaging Cultural Color Character Asset Pack (.ZIP)...");
+    try {
+      await downloadColorAssetPackZip(glyphs, fontSettings.name, colorCanvasDataUrl || undefined);
+      showToast("Cultural Color Asset Pack downloaded successfully!");
+    } catch (err: any) {
+      console.error("ZIP creation failed:", err);
+      showToast("Error creating ZIP: " + err.message);
+    } finally {
+      setIsGeneratingColorPack(false);
+    }
+  }, [glyphs, fontSettings.name, colorCanvasDataUrl, showToast]);
+
   // Update single glyph character tag
   const handleUpdateGlyphChar = (glyphId: string, newChar: string) => {
     setGlyphs((prev) =>
@@ -318,7 +342,7 @@ export default function App() {
       imageSettings.smoothing
     );
 
-    // Render cropped preview
+    // Render cropped preview (monochrome mask)
     const cropCanvas = document.createElement("canvas");
     const pad = 4;
     cropCanvas.width = mergedBbox.width + pad * 2;
@@ -338,6 +362,29 @@ export default function App() {
       );
     }
 
+    // Render cropped color preview if available
+    let colorDataUrl: string | undefined = undefined;
+    if (processedResult.colorCanvas) {
+      const colorCropCanvas = document.createElement("canvas");
+      colorCropCanvas.width = mergedBbox.width + pad * 2;
+      colorCropCanvas.height = mergedBbox.height + pad * 2;
+      const colorCtx = colorCropCanvas.getContext("2d");
+      if (colorCtx) {
+        colorCtx.drawImage(
+          processedResult.colorCanvas,
+          mergedBbox.x,
+          mergedBbox.y,
+          mergedBbox.width,
+          mergedBbox.height,
+          pad,
+          pad,
+          mergedBbox.width,
+          mergedBbox.height
+        );
+        colorDataUrl = colorCropCanvas.toDataURL("image/png");
+      }
+    }
+
     const primaryTarget = targets[0];
     const newMergedGlyph: DetectedGlyph = {
       id: `merged-${Date.now()}`,
@@ -346,6 +393,7 @@ export default function App() {
       bbox: mergedBbox,
       contours,
       canvasDataUrl: cropCanvas.toDataURL("image/png"),
+      colorCanvasDataUrl: colorDataUrl,
       advanceWidth: Math.round(mergedBbox.width * 1.25),
       leftBearing: 20,
       rightBearing: 20,
@@ -474,6 +522,7 @@ export default function App() {
         glyphCount={glyphs.length}
         hasCompiledFont={Boolean(compiledFontResult)}
         onDownloadFont={handleDownloadTtf}
+        onDownloadColorPack={handleDownloadColorAssetPack}
         onGenerateFont={handleGenerateFont}
         isGenerating={isBuildingFont}
       />
@@ -527,6 +576,7 @@ export default function App() {
             settings={fontSettings}
             glyphs={glyphs}
             onDownloadTtf={handleDownloadTtf}
+            onDownloadColorPack={handleDownloadColorAssetPack}
             onProceedToExport={() => setCurrentTab("export")}
           />
         )}
@@ -537,7 +587,9 @@ export default function App() {
             glyphCount={compiledFontResult?.glyphCount || glyphs.length}
             synthesizedCount={compiledFontResult?.synthesizedCount || 0}
             onDownloadTtf={handleDownloadTtf}
+            onDownloadColorPack={handleDownloadColorAssetPack}
             hasCompiledFont={Boolean(compiledFontResult)}
+            isGeneratingColorPack={isGeneratingColorPack}
           />
         )}
       </main>
