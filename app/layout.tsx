@@ -9,6 +9,18 @@ export const metadata: Metadata = {
     title: "Image to Font Studio",
     description:
       "Convert hand-drawn or designed character sheet images into standard TrueType (.ttf) fonts and Cultural Color Asset Packs (.zip).",
+    images: [
+      {
+        url: "/og-image.svg",
+        width: 1200,
+        height: 630,
+        alt: "Image to Font Studio Preview",
+      },
+    ],
+  },
+  icons: {
+    icon: "/favicon.svg",
+    apple: "/favicon.svg",
   },
 };
 
