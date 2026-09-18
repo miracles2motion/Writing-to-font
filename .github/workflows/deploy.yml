@@ -32,13 +32,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci || npm install --legacy-peer-deps
 
       - name: Build static site for GitHub Pages
-        run: npm run build:pages || npx vite build --base=./
+        run: npm run build:pages
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

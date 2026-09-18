@@ -448,7 +448,9 @@ export default function App() {
       );
     } catch (err: any) {
       console.error("AI auto-label error:", err);
-      showToast(err.message || "Could not connect to Gemini API. Falling back to sequence.");
+      // Fallback for static hosting (GitHub Pages)
+      handleAutoSequence("A-Z_0-9");
+      showToast("Auto-sequenced A-Z, 0-9. (AI vision requires backend server)");
     } finally {
       setIsAiLabeling(false);
     }

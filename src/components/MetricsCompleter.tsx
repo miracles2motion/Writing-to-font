@@ -56,10 +56,26 @@ export const MetricsCompleter: React.FC<MetricsCompleterProps> = ({
           fontStyle: settings.styleName,
         }),
       });
+
+      if (!res.ok) {
+        // Fallback advice when running on static host like GitHub Pages
+        setAiAdvice({
+          lowercaseDerivationTip: "For hand-drawn display letterforms, uppercase forms can be scaled to ~75% cap-height to create clean small-caps.",
+          recommendedTracking: "Set side bearings to 30–45 units to give each hand-drawn stroke natural breathing space.",
+          samplePangrams: ["THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG", "SPHINX OF BLACK QUARTZ, JUDGE MY VOW!"]
+        });
+        return;
+      }
+
       const data = await res.json();
       setAiAdvice(data);
     } catch (err) {
       console.error("Failed to get font advice:", err);
+      setAiAdvice({
+        lowercaseDerivationTip: "For hand-drawn letterforms, keep x-height around 60-70% of cap-height for natural proportions.",
+        recommendedTracking: "Recommended side bearing margin: 35 units.",
+        samplePangrams: ["THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG"]
+      });
     } finally {
       setLoadingAdvice(false);
     }
