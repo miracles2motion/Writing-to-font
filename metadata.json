@@ -2,5 +2,7 @@
   "name": "Image to Font Studio",
   "description": "Convert hand-drawn or designed character sheet images into standard TrueType fonts with background removal, glyph extraction, vectorization, and live preview.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
