@@ -137,6 +137,75 @@ app.get("/api/ai/status", (req, res) => {
   });
 });
 
+// Dynamic List of Available Models from Gemini API for the provided or server key
+app.get("/api/ai/models", async (req, res) => {
+  try {
+    const customApiKey = extractApiKeyFromReq(req);
+    const ai = getAI(customApiKey);
+
+    if (!ai) {
+      return res.status(401).json({
+        error: "No Gemini API key available. Please enter your API key to list available models.",
+        models: [],
+      });
+    }
+
+    // Query Gemini models API via SDK
+    const response = await ai.models.list();
+    const rawList: any[] = [];
+
+    // The SDK models.list() can return an iterable or list array
+    if (response) {
+      if (Symbol.asyncIterator in Object(response)) {
+        for await (const model of response as any) {
+          rawList.push(model);
+        }
+      } else if (Array.isArray((response as any).models)) {
+        rawList.push(...(response as any).models);
+      } else if (Array.isArray(response)) {
+        rawList.push(...response);
+      }
+    }
+
+    // Filter models suitable for multimodal vision/OCR and generation (e.g. gemini-*)
+    const formattedModels = rawList
+      .map((m: any) => {
+        const rawName = m.name || m.id || "";
+        const cleanId = rawName.replace(/^models\//, "");
+        return {
+          id: cleanId,
+          name: m.displayName || cleanId,
+          description: m.description || "Gemini multimodal generative vision model.",
+          supportedActions: m.supportedActions || [],
+          inputTokenLimit: m.inputTokenLimit,
+          outputTokenLimit: m.outputTokenLimit,
+        };
+      })
+      .filter((m: any) => {
+        const idLower = m.id.toLowerCase();
+        // Keep gemini generative/vision models, exclude audio-only or non-gemini embeddings
+        return (
+          idLower.includes("gemini") &&
+          !idLower.includes("embedding") &&
+          !idLower.includes("aqa") &&
+          !idLower.includes("imagen")
+        );
+      });
+
+    return res.json({
+      success: true,
+      count: formattedModels.length,
+      models: formattedModels,
+    });
+  } catch (err: any) {
+    console.warn("Failed to fetch dynamic model list from Gemini API:", err?.message || err);
+    return res.status(500).json({
+      error: err?.message || "Failed to query available models from Gemini API.",
+      models: [],
+    });
+  }
+});
+
 // AI Recognition of Glyph Sheet
 app.post("/api/ai/recognize-glyphs", async (req, res) => {
   try {

@@ -37,7 +37,7 @@ export const Header: React.FC<HeaderProps> = ({
   onGenerateFont,
   onOpenApiKeyModal,
   hasCustomApiKey,
-  activeModel = "gemini-3.8-flash",
+  activeModel = "gemini-2.5-flash",
   isGenerating,
 }) => {
   const tabs: { id: StudioTab; stepNum: string; label: string; shortLabel: string; icon: React.ReactNode; badge?: string | number }[] = [
