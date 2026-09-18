@@ -25,9 +25,25 @@ import {
 } from "./utils/fontBuilder";
 import { downloadColorAssetPackZip } from "./utils/colorAssetExporter";
 import { SEQUENCE_PATTERNS } from "./utils/glyphUtils";
+import { ProcessingOverlay } from "./components/ProcessingOverlay";
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<StudioTab>("upload");
+
+  // Rich File Upload & Extraction Loading State
+  const [processingState, setProcessingState] = useState<{
+    isOpen: boolean;
+    stage: string;
+    progress: number;
+    currentStepIndex: number;
+    fileName?: string;
+    detectedCount?: number;
+  }>({
+    isOpen: false,
+    stage: "",
+    progress: 0,
+    currentStepIndex: 0,
+  });
 
   // Image Processing state
   const [sourceImageUrl, setSourceImageUrl] = useState<string | null>(null);
@@ -80,18 +96,57 @@ export default function App() {
     }, 3500);
   }, []);
 
-  // Process image and extract glyphs
+  // Process image and extract glyphs with rich staged progress updates
   const processImage = useCallback(
-    async (img: HTMLImageElement, settings: ImageProcessingSettings) => {
+    async (
+      img: HTMLImageElement,
+      settings: ImageProcessingSettings,
+      meta?: { fileName?: string; showModal?: boolean }
+    ) => {
+      const showOverlay = meta?.showModal !== false;
       setIsProcessingImage(true);
+
+      if (showOverlay) {
+        setProcessingState({
+          isOpen: true,
+          stage: "Decoding pixels & dimensions...",
+          progress: 20,
+          currentStepIndex: 0,
+          fileName: meta?.fileName,
+        });
+      }
+
+      // Allow browser to render loading UI
+      await new Promise((resolve) => setTimeout(resolve, 40));
+
       try {
-        // 1. Remove white background and build binary mask & color cutout canvas
+        // Step 1: Remove white background and build binary mask & color cutout canvas
+        if (showOverlay) {
+          setProcessingState((prev) => ({
+            ...prev,
+            stage: "Removing white background & binarizing ink...",
+            progress: 35,
+            currentStepIndex: 1,
+          }));
+        }
+        await new Promise((resolve) => setTimeout(resolve, 40));
+
         const result = removeBackgroundAndBinarize(img, settings);
         setProcessedResult(result);
         setCleanedCanvasDataUrl(result.cleanedCanvas.toDataURL("image/png"));
         setColorCanvasDataUrl(result.colorCanvas.toDataURL("image/png"));
 
-        // 2. Segment connected components into glyph bounding boxes
+        // Step 2: Segment connected components into glyph bounding boxes
+        if (showOverlay) {
+          setProcessingState((prev) => ({
+            ...prev,
+            stage: "Discovering and segmenting character glyphs...",
+            progress: 58,
+            currentStepIndex: 2,
+          }));
+        }
+        await new Promise((resolve) => setTimeout(resolve, 40));
+
         const detected = segmentGlyphs(
           result.binaryMask,
           result.width,
@@ -101,7 +156,18 @@ export default function App() {
           settings
         );
 
-        // 3. Extract vector contours for each glyph
+        // Step 3: Extract vector contours for each glyph
+        if (showOverlay) {
+          setProcessingState((prev) => ({
+            ...prev,
+            detectedCount: detected.length,
+            stage: `Found ${detected.length} characters • Tracing vector contours...`,
+            progress: 78,
+            currentStepIndex: 3,
+          }));
+        }
+        await new Promise((resolve) => setTimeout(resolve, 40));
+
         const glyphsWithContours = detected.map((g) => {
           const contours = extractGlyphContours(
             result.binaryMask,
@@ -118,16 +184,39 @@ export default function App() {
 
         setGlyphs(glyphsWithContours);
 
-        // 4. Auto-compile font with initial settings
+        // Step 4: Auto-compile font with initial settings
+        if (showOverlay) {
+          setProcessingState((prev) => ({
+            ...prev,
+            stage: "Compiling TrueType font tables & metrics...",
+            progress: 92,
+            currentStepIndex: 4,
+          }));
+        }
+        await new Promise((resolve) => setTimeout(resolve, 40));
+
         if (glyphsWithContours.length > 0) {
           const fontRes = buildFontFromGlyphs(glyphsWithContours, fontSettings);
           setCompiledFontResult(fontRes);
           await applyDynamicFontFace(fontSettings.family, fontRes.arrayBuffer);
         }
 
+        if (showOverlay) {
+          setProcessingState((prev) => ({
+            ...prev,
+            stage: "Extraction complete!",
+            progress: 100,
+            currentStepIndex: 4,
+          }));
+          // Brief pause so user sees 100% completion
+          await new Promise((resolve) => setTimeout(resolve, 350));
+          setProcessingState((prev) => ({ ...prev, isOpen: false }));
+        }
+
         showToast(`Isolated ${glyphsWithContours.length} glyphs with transparent background`);
       } catch (err: any) {
         console.error("Error processing image:", err);
+        setProcessingState((prev) => ({ ...prev, isOpen: false }));
         showToast("Error processing image contours: " + err.message);
       } finally {
         setIsProcessingImage(false);
@@ -136,23 +225,57 @@ export default function App() {
     [fontSettings, showToast]
   );
 
-  // Load a sample preset on startup
-  useEffect(() => {
-    const dataUrl = generateSampleSheet("cultural");
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      setSourceImageUrl(dataUrl);
-      setSourceImageElement(img);
-      processImage(img, imageSettings);
-    };
-    img.src = dataUrl;
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Clear currently loaded image and reset to blank studio
+  const handleClearImage = () => {
+    setSourceImageUrl(null);
+    setSourceImageElement(null);
+    setGlyphs([]);
+    setProcessedResult(null);
+    setCleanedCanvasDataUrl(null);
+    setColorCanvasDataUrl(null);
+    setCompiledFontResult(null);
+    setFontSettings((prev) => ({
+      ...prev,
+      name: "My Custom Font",
+      family: "MyCustomFont",
+    }));
+    showToast("Cleared loaded character sheet.");
+  };
 
-  // Handle uploaded file
+  // Handle uploaded file with real progress listener
   const handleUploadImage = (file: File) => {
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+    const fileDisplayName = `${file.name} (${sizeMb} MB)`;
+
+    // Immediately show loading screen with upload listener
+    setProcessingState({
+      isOpen: true,
+      stage: "Reading file into browser memory...",
+      progress: 6,
+      currentStepIndex: 0,
+      fileName: fileDisplayName,
+    });
+
     const reader = new FileReader();
+
+    reader.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const readPercent = Math.round((e.loaded / e.total) * 16);
+        setProcessingState((prev) => ({
+          ...prev,
+          progress: 6 + readPercent,
+          stage: `Reading file bytes (${Math.round((e.loaded / e.total) * 100)}%)...`,
+        }));
+      }
+    };
+
     reader.onload = (e) => {
+      setProcessingState((prev) => ({
+        ...prev,
+        progress: 22,
+        stage: "Decoding image dimensions & pixels...",
+      }));
+
       const dataUrl = e.target?.result as string;
       const img = new Image();
       img.onload = () => {
@@ -173,36 +296,59 @@ export default function App() {
           family: deducedFamily,
         }));
 
-        processImage(img, imageSettings);
+        processImage(img, imageSettings, { fileName: fileDisplayName, showModal: true });
         setCurrentTab("upload");
         showToast(`Loaded ${file.name} successfully`);
       };
+
+      img.onerror = () => {
+        setProcessingState((prev) => ({ ...prev, isOpen: false }));
+        showToast("Could not decode image. Please ensure it is a valid PNG, JPG, or WEBP.");
+      };
+
       img.src = dataUrl;
     };
+
+    reader.onerror = () => {
+      setProcessingState((prev) => ({ ...prev, isOpen: false }));
+      showToast("Error reading file.");
+    };
+
     reader.readAsDataURL(file);
   };
 
   // Handle sample preset selection
   const handleSelectSamplePreset = (presetId: string) => {
+    const presetNames: Record<string, string> = {
+      cultural: "African Cultural Heritage",
+      dualcase: "Dual-Case Handwriting",
+      handwritten: "Handmade Marker",
+      geometric: "Modern Geometric",
+      retro: "Vintage Grotesque",
+    };
+    const name = presetNames[presetId] || "Sample Font";
+
+    setProcessingState({
+      isOpen: true,
+      stage: `Generating "${name}" sample sheet...`,
+      progress: 10,
+      currentStepIndex: 0,
+      fileName: `${name} Sheet`,
+    });
+
     const dataUrl = generateSampleSheet(presetId);
     const img = new Image();
     img.onload = () => {
       setSourceImageUrl(dataUrl);
       setSourceImageElement(img);
 
-      const presetNames: Record<string, string> = {
-        handwritten: "Handmade Marker",
-        geometric: "Modern Geometric",
-        retro: "Vintage Grotesque",
-      };
-      const name = presetNames[presetId] || "Sample Font";
       setFontSettings((prev) => ({
         ...prev,
         name,
         family: name.replace(/\s+/g, ""),
       }));
 
-      processImage(img, imageSettings);
+      processImage(img, imageSettings, { fileName: `${name} Preset`, showModal: true });
       showToast(`Loaded "${name}" sample sheet`);
     };
     img.src = dataUrl;
@@ -213,7 +359,7 @@ export default function App() {
     const updated = { ...imageSettings, ...newSettings };
     setImageSettings(updated);
     if (sourceImageElement) {
-      processImage(sourceImageElement, updated);
+      processImage(sourceImageElement, updated, { fileName: "Re-processing Settings", showModal: true });
     }
   };
 
@@ -569,13 +715,17 @@ export default function App() {
           <UploadAndCutout
             sourceImageUrl={sourceImageUrl}
             cleanedCanvasDataUrl={cleanedCanvasDataUrl}
+            colorCanvasDataUrl={colorCanvasDataUrl}
             detectedCount={glyphs.length}
             settings={imageSettings}
             onUpdateSettings={handleUpdateImageSettings}
             onUploadImage={handleUploadImage}
             onSelectSamplePreset={handleSelectSamplePreset}
             onProceedToGlyphs={() => setCurrentTab("glyphs")}
+            onClearImage={handleClearImage}
             isProcessing={isProcessingImage}
+            processingProgress={processingState.progress}
+            processingStage={processingState.stage}
           />
         )}
 
@@ -638,6 +788,16 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* Processing & Upload Progress Modal */}
+      <ProcessingOverlay
+        isOpen={processingState.isOpen}
+        stage={processingState.stage}
+        progress={processingState.progress}
+        fileName={processingState.fileName}
+        currentStepIndex={processingState.currentStepIndex}
+        detectedCount={processingState.detectedCount}
+      />
 
       {/* Footer */}
       <footer className="border-t border-neutral-800/80 bg-neutral-950/80 py-6 text-center text-xs text-neutral-500">

@@ -135,7 +135,7 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
   const currentCropGlyph = glyphs[cropGlyphIndex] || null;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10 space-y-6 sm:space-y-8">
       {/* Top action & batch bar */}
       <div className="bg-neutral-800/50 border border-neutral-700/80 rounded-2xl p-5 shadow-lg space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -364,8 +364,20 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
         </div>
       </div>
 
-      {/* Glyphs Card Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+      {/* Glyphs Card Grid or Empty State */}
+      {filteredGlyphs.length === 0 ? (
+        <div className="bg-neutral-800/30 border border-neutral-700/60 rounded-2xl p-12 text-center space-y-3">
+          <p className="text-base font-semibold text-neutral-200">
+            {glyphs.length === 0 ? "No Character Glyphs Isolated Yet" : "No Glyphs Match Active Filter"}
+          </p>
+          <p className="text-xs text-neutral-400 max-w-md mx-auto">
+            {glyphs.length === 0
+              ? "Upload an image in Step 1 (Upload & Cutout) to isolate your drawn characters and review them here."
+              : "Try clicking 'All' in the filter bar above to see all isolated characters."}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
         {filteredGlyphs.map((glyph) => {
           const isSelected = selectedIds.has(glyph.id);
           const isEditing = editingGlyphId === glyph.id;
@@ -562,24 +574,27 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
           );
         })}
       </div>
+      )}
 
       {/* Bottom CTA to next step */}
-      <div className="bg-neutral-800/40 border border-neutral-700/60 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <span className="text-xs text-neutral-400 block">Step 2 Complete</span>
-          <span className="text-sm font-semibold text-neutral-200">
-            {glyphs.length} characters reviewed. Next: configure font standards & missing lowercase.
-          </span>
+      {glyphs.length > 0 && (
+        <div className="bg-neutral-800/40 border border-neutral-700/60 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <span className="text-xs text-neutral-400 block">Step 2 Complete</span>
+            <span className="text-sm font-semibold text-neutral-200">
+              {glyphs.length} characters reviewed. Next: configure font standards & missing lowercase.
+            </span>
+          </div>
+          <button
+            id="btn-proceed-to-font-standards"
+            onClick={onProceedToMetrics}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-400 active:scale-95 text-neutral-950 shadow-lg shadow-amber-500/20 transition"
+          >
+            <span>Configure Font Standards</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
         </div>
-        <button
-          id="btn-proceed-to-font-standards"
-          onClick={onProceedToMetrics}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-400 active:scale-95 text-neutral-950 shadow-lg shadow-amber-500/20 transition"
-        >
-          <span>Configure Font Standards</span>
-          <ArrowRight className="w-4 h-4" />
-        </button>
-      </div>
+      )}
 
       {/* Glyph Crop & Cutout Review Modal */}
       {cropModalOpen && currentCropGlyph && (

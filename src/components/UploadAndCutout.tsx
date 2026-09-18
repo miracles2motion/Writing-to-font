@@ -23,7 +23,10 @@ interface UploadAndCutoutProps {
   onUploadImage: (file: File) => void;
   onSelectSamplePreset: (presetId: string) => void;
   onProceedToGlyphs: () => void;
+  onClearImage?: () => void;
   isProcessing: boolean;
+  processingProgress?: number;
+  processingStage?: string;
 }
 
 export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
@@ -36,7 +39,10 @@ export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
   onUploadImage,
   onSelectSamplePreset,
   onProceedToGlyphs,
+  onClearImage,
   isProcessing,
+  processingProgress,
+  processingStage,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -66,7 +72,7 @@ export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10 space-y-6 sm:space-y-8">
       {/* Introduction banner explaining the exact capability */}
       <div className="bg-gradient-to-r from-neutral-800/80 via-neutral-800/50 to-neutral-900 border border-neutral-700/80 rounded-2xl p-6 shadow-xl relative overflow-hidden">
         <div className="max-w-3xl relative z-10 space-y-2">
@@ -87,17 +93,42 @@ export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left Column: Upload & Parameters Controls (4 cols) */}
         <div className="lg:col-span-4 space-y-6">
+          {/* Active image status badge with clear button */}
+          {sourceImageUrl && (
+            <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs animate-in fade-in">
+              <div className="flex items-center gap-2 min-w-0">
+                <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
+                <span className="text-neutral-200 font-semibold truncate">
+                  Character Sheet Loaded ({detectedCount} glyphs)
+                </span>
+              </div>
+              {onClearImage && (
+                <button
+                  type="button"
+                  onClick={onClearImage}
+                  className="text-[11px] font-semibold text-neutral-400 hover:text-red-400 underline shrink-0 transition ml-2"
+                >
+                  Clear Sheet
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Upload Dropzone */}
           <div
             id="dropzone-image-upload"
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all duration-200 ${
-              isDragging
-                ? "border-amber-500 bg-amber-500/10 scale-[1.01]"
-                : "border-neutral-700 hover:border-neutral-500 bg-neutral-800/40 hover:bg-neutral-800/70"
+            onClick={() => {
+              if (!isProcessing) fileInputRef.current?.click();
+            }}
+            className={`border-2 border-dashed rounded-2xl p-6 sm:p-7 text-center transition-all duration-200 ${
+              isProcessing
+                ? "border-amber-500/70 bg-amber-500/10 cursor-wait"
+                : isDragging
+                ? "border-amber-500 bg-amber-500/10 scale-[1.01] cursor-pointer"
+                : "border-neutral-700 hover:border-neutral-500 bg-neutral-800/40 hover:bg-neutral-800/70 cursor-pointer"
             }`}
           >
             <input
@@ -105,17 +136,50 @@ export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
               type="file"
               accept="image/png,image/jpeg,image/webp,image/jpg"
               className="hidden"
+              disabled={isProcessing}
               onChange={handleFileChange}
             />
-            <div className="w-12 h-12 mx-auto rounded-xl bg-neutral-700/60 flex items-center justify-center text-neutral-200 mb-3 shadow-inner">
-              <Upload className="w-6 h-6 text-amber-400" />
-            </div>
-            <p className="text-sm font-semibold text-neutral-200">
-              Click to browse or drop character sheet
-            </p>
-            <p className="text-xs text-neutral-400 mt-1">
-              Supports PNG, JPG, or WEBP (white background recommended)
-            </p>
+            {isProcessing ? (
+              <div className="py-2 space-y-3">
+                <div className="w-12 h-12 mx-auto rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center shadow-inner">
+                  <div className="w-6 h-6 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-amber-300">
+                    {processingStage || "Analyzing and extracting characters..."}
+                  </p>
+                  <p className="text-xs text-neutral-400 mt-1">
+                    Isolating contours and preparing transparent cultural background
+                  </p>
+                </div>
+                {processingProgress !== undefined && (
+                  <div className="w-full max-w-xs mx-auto space-y-1.5 pt-1">
+                    <div className="w-full h-2 bg-neutral-900 rounded-full overflow-hidden border border-neutral-700">
+                      <div
+                        className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all duration-200 shadow-sm shadow-amber-500/50"
+                        style={{ width: `${Math.max(5, Math.min(100, processingProgress))}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] text-neutral-400 font-mono">
+                      <span>In Progress</span>
+                      <span className="font-bold text-amber-300">{Math.round(processingProgress)}%</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="w-12 h-12 mx-auto rounded-xl bg-neutral-700/60 flex items-center justify-center text-neutral-200 mb-3 shadow-inner">
+                  <Upload className="w-6 h-6 text-amber-400" />
+                </div>
+                <p className="text-sm font-semibold text-neutral-200">
+                  Click to browse or drop character sheet
+                </p>
+                <p className="text-xs text-neutral-400 mt-1">
+                  Supports PNG, JPG, or WEBP (white background recommended)
+                </p>
+              </>
+            )}
           </div>
 
           {/* Preset Sample Sheets */}
@@ -445,11 +509,26 @@ export const UploadAndCutout: React.FC<UploadAndCutoutProps> = ({
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-16 space-y-3">
-                  <ImageIcon className="w-12 h-12 text-neutral-600 mx-auto" />
-                  <p className="text-sm font-medium text-neutral-400">
-                    No image uploaded yet. Drop a character sheet or pick a sample preset!
-                  </p>
+                <div className="text-center py-20 px-6 space-y-4 max-w-md mx-auto">
+                  <div className="w-16 h-16 mx-auto rounded-2xl bg-neutral-800/80 border border-neutral-700 flex items-center justify-center text-neutral-400 shadow-inner">
+                    <Upload className="w-8 h-8 text-amber-400" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <h3 className="text-base font-bold text-neutral-200">
+                      No Character Sheet Loaded
+                    </h3>
+                    <p className="text-xs text-neutral-400 leading-relaxed">
+                      Upload an image file containing your drawn alphabet/numbers on the left, or test the studio by choosing a built-in sample sheet.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 active:scale-95 text-neutral-950 shadow-md shadow-amber-500/20 transition"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>Browse Character Sheet File</span>
+                  </button>
                 </div>
               )}
             </div>

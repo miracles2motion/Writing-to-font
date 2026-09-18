@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="brandGrad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="50%" stop-color="#ea580c" />
+      <stop offset="100%" stop-color="#b45309" />
+    </linearGradient>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1c1917" />
+      <stop offset="100%" stop-color="#0c0a09" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#f59e0b" flood-opacity="0.35" />
+    </filter>
+  </defs>
+  
+  <!-- App Container Icon Rounded Rect -->
+  <rect width="64" height="64" rx="16" fill="url(#bgGrad)" stroke="#382e25" stroke-width="1.5" />
+  
+  <!-- Subtle Vector Grid Lines -->
+  <path d="M12 48H52" stroke="#292524" stroke-width="1" stroke-dasharray="2 2" />
+  <path d="M12 20H52" stroke="#292524" stroke-width="1" stroke-dasharray="2 2" />
+  <path d="M12 34H52" stroke="#44403c" stroke-width="1" stroke-dasharray="2 2" opacity="0.6" />
+
+  <!-- Stylized Font Letter 'A' + Vector Pen & Bezier Nodes -->
+  <g filter="url(#glow)">
+    <!-- Left Leg -->
+    <path d="M19 48L30 18C30.6 16.5 33.4 16.5 34 18L45 48" stroke="url(#brandGrad)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" />
+    <!-- Crossbar -->
+    <path d="M23.5 37H40.5" stroke="url(#brandGrad)" stroke-width="4" stroke-linecap="round" />
+    <!-- Cultural Accent Notch -->
+    <path d="M32 16V22" stroke="#fde047" stroke-width="2.5" stroke-linecap="round" />
+    
+    <!-- Vector Anchor Points (Nodes) -->
+    <rect x="29.5" y="15.5" width="5" height="5" rx="1" fill="#fef08a" stroke="#78350f" stroke-width="1" />
+    <rect x="16.5" y="45.5" width="5" height="5" rx="1" fill="#fef08a" stroke="#78350f" stroke-width="1" />
+    <rect x="42.5" y="45.5" width="5" height="5" rx="1" fill="#fef08a" stroke="#78350f" stroke-width="1" />
+    <rect x="21" y="34.5" width="4.5" height="4.5" rx="1" fill="#fef08a" stroke="#78350f" stroke-width="1" />
+    <rect x="38.5" y="34.5" width="4.5" height="4.5" rx="1" fill="#fef08a" stroke="#78350f" stroke-width="1" />
+  </g>
+</svg>

@@ -118,7 +118,7 @@ export const TypeTester: React.FC<TypeTesterProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10 space-y-6 sm:space-y-8">
       {/* Top Banner with Quick Download */}
       <div className="bg-neutral-800/50 border border-neutral-700/80 rounded-2xl p-6 shadow-xl flex flex-wrap items-center justify-between gap-4">
         <div>

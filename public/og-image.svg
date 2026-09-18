@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <!-- Background Gradients -->
+    <radialGradient id="ogGlow" cx="50%" cy="30%" r="65%">
+      <stop offset="0%" stop-color="#3b250e" stop-opacity="0.6" />
+      <stop offset="50%" stop-color="#181512" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#0c0a09" stop-opacity="1" />
+    </radialGradient>
+    <linearGradient id="goldGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="50%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#ea580c" />
+    </linearGradient>
+    <linearGradient id="cardGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#262320" />
+      <stop offset="100%" stop-color="#171513" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#000" flood-opacity="0.6" />
+    </filter>
+  </defs>
+
+  <!-- Background Canvas -->
+  <rect width="1200" height="630" fill="#0c0a09" />
+  <rect width="1200" height="630" fill="url(#ogGlow)" />
+
+  <!-- Subtle Typographic Grid Lines -->
+  <line x1="80" y1="180" x2="1120" y2="180" stroke="#262320" stroke-width="1" stroke-dasharray="4 4" />
+  <line x1="80" y1="360" x2="1120" y2="360" stroke="#262320" stroke-width="1" stroke-dasharray="4 4" />
+  <line x1="80" y1="480" x2="1120" y2="480" stroke="#262320" stroke-width="1" stroke-dasharray="4 4" />
+
+  <!-- App Brand Icon -->
+  <g transform="translate(80, 70)">
+    <rect width="64" height="64" rx="18" fill="#1c1917" stroke="#44392e" stroke-width="2" />
+    <path d="M19 48L30 18C30.6 16.5 33.4 16.5 34 18L45 48" stroke="url(#goldGrad)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M23.5 37H40.5" stroke="url(#goldGrad)" stroke-width="4" stroke-linecap="round" />
+    <rect x="29.5" y="15.5" width="5" height="5" rx="1" fill="#fef08a" />
+    <rect x="16.5" y="45.5" width="5" height="5" rx="1" fill="#fef08a" />
+    <rect x="42.5" y="45.5" width="5" height="5" rx="1" fill="#fef08a" />
+  </g>
+
+  <!-- Brand Title & Tagline -->
+  <text x="164" y="105" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="28" font-weight="800" fill="#ffffff" letter-spacing="-0.5">Image to Font Studio</text>
+  <text x="164" y="128" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="600" fill="#f59e0b" letter-spacing="1">TYPOGRAPHY STUDIO &amp; ASSET PACK COMPILER</text>
+
+  <!-- Main Headline -->
+  <text x="80" y="240" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="52" font-weight="800" fill="#f5f5f4" letter-spacing="-1.5">
+    Convert Hand-Drawn &amp; Cultural Art
+  </text>
+  <text x="80" y="304" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="52" font-weight="800" fill="url(#goldGrad)" letter-spacing="-1.5">
+    Into Installable TrueType Fonts
+  </text>
+
+  <!-- Subtitle Description -->
+  <text x="80" y="360" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="22" font-weight="400" fill="#a8a29e">
+    Upload your alphabet sheet. Automatically isolate characters, trim neighbor bleed,
+  </text>
+  <text x="80" y="392" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="22" font-weight="400" fill="#a8a29e">
+    vectorize contours, and export both .TTF vector fonts &amp; Cultural Color Asset Packs (.ZIP).
+  </text>
+
+  <!-- Badges Strip -->
+  <g transform="translate(80, 440)">
+    <!-- Badge 1: .TTF -->
+    <rect x="0" y="0" width="220" height="46" rx="12" fill="#1c1917" stroke="#382e25" stroke-width="1.5" />
+    <circle cx="24" cy="23" r="6" fill="#f59e0b" />
+    <text x="40" y="29" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="15" font-weight="700" fill="#fafaf9">TrueType (.TTF) Font</text>
+
+    <!-- Badge 2: Cultural Color Pack -->
+    <rect x="236" y="0" width="260" height="46" rx="12" fill="#1c1917" stroke="#382e25" stroke-width="1.5" />
+    <circle cx="260" cy="23" r="6" fill="#f97316" />
+    <text x="276" y="29" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="15" font-weight="700" fill="#fafaf9">Cultural Color Pack (.ZIP)</text>
+
+    <!-- Badge 3: Manual Crop Editor -->
+    <rect x="512" y="0" width="230" height="46" rx="12" fill="#1c1917" stroke="#382e25" stroke-width="1.5" />
+    <circle cx="536" cy="23" r="6" fill="#3b82f6" />
+    <text x="552" y="29" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="15" font-weight="700" fill="#fafaf9">Manual Crop &amp; Split</text>
+
+    <!-- Badge 4: Live Tester -->
+    <rect x="758" y="0" width="220" height="46" rx="12" fill="#1c1917" stroke="#382e25" stroke-width="1.5" />
+    <circle cx="782" cy="23" r="6" fill="#10b981" />
+    <text x="798" y="29" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="15" font-weight="700" fill="#fafaf9">Live Type Tester</text>
+  </g>
+
+  <!-- Right Visual Feature Showcase Card -->
+  <g transform="translate(820, 80)" filter="url(#shadow)">
+    <rect width="300" height="320" rx="24" fill="url(#cardGrad)" stroke="#382e25" stroke-width="2" />
+    
+    <!-- Cutout Preview Header -->
+    <text x="24" y="42" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="700" fill="#a8a29e" letter-spacing="1">GLYPH EXTRACTION</text>
+    
+    <!-- 4 Letter Cards -->
+    <!-- Card 1: A -->
+    <rect x="24" y="60" width="118" height="110" rx="16" fill="#141210" stroke="#2e2720" />
+    <text x="83" y="132" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="64" font-weight="900" fill="#f59e0b" text-anchor="middle">A</text>
+    <rect x="36" y="72" width="28" height="18" rx="5" fill="#f59e0b" fill-opacity="0.2" />
+    <text x="50" y="85" font-family="monospace" font-size="10" font-weight="700" fill="#fbbf24" text-anchor="middle">CAP</text>
+    
+    <!-- Card 2: a -->
+    <rect x="158" y="60" width="118" height="110" rx="16" fill="#141210" stroke="#2e2720" />
+    <text x="217" y="136" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="62" font-weight="900" fill="#ea580c" text-anchor="middle">a</text>
+    <rect x="170" y="72" width="34" height="18" rx="5" fill="#ea580c" fill-opacity="0.2" />
+    <text x="187" y="85" font-family="monospace" font-size="10" font-weight="700" fill="#fdba74" text-anchor="middle">lower</text>
+
+    <!-- Card 3: B -->
+    <rect x="24" y="186" width="118" height="110" rx="16" fill="#141210" stroke="#2e2720" />
+    <text x="83" y="260" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="64" font-weight="900" fill="#0284c7" text-anchor="middle">B</text>
+    <rect x="36" y="198" width="28" height="18" rx="5" fill="#0284c7" fill-opacity="0.2" />
+    <text x="50" y="211" font-family="monospace" font-size="10" font-weight="700" fill="#38bdf8" text-anchor="middle">CAP</text>
+
+    <!-- Card 4: 8 -->
+    <rect x="158" y="186" width="118" height="110" rx="16" fill="#141210" stroke="#2e2720" />
+    <text x="217" y="260" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="64" font-weight="900" fill="#10b981" text-anchor="middle">8</text>
+    <rect x="170" y="198" width="28" height="18" rx="5" fill="#10b981" fill-opacity="0.2" />
+    <text x="184" y="211" font-family="monospace" font-size="10" font-weight="700" fill="#34d399" text-anchor="middle">0-9</text>
+  </g>
+
+  <!-- Bottom Attribution Footer -->
+  <line x1="80" y1="540" x2="1120" y2="540" stroke="#262320" stroke-width="1" />
+  <text x="80" y="580" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="500" fill="#78716c">
+    Browser-Based • 100% Client-Side Processing • Supports PNG, JPG, WEBP • TrueType &amp; Cultural Asset Packaging
+  </text>
+</svg>

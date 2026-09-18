@@ -6,9 +6,9 @@ import {
   Type,
   Sliders,
   Play,
-  FileCheck,
 } from "lucide-react";
 import { StudioTab } from "../types";
+import { AppLogo } from "./AppLogo";
 
 interface HeaderProps {
   currentTab: StudioTab;
@@ -33,60 +33,69 @@ export const Header: React.FC<HeaderProps> = ({
   onGenerateFont,
   isGenerating,
 }) => {
-  const tabs: { id: StudioTab; label: string; icon: React.ReactNode; badge?: string | number }[] = [
+  const tabs: { id: StudioTab; stepNum: string; label: string; shortLabel: string; icon: React.ReactNode; badge?: string | number }[] = [
     {
       id: "upload",
+      stepNum: "1",
       label: "1. Upload & Cutout",
+      shortLabel: "Upload",
       icon: <Layers className="w-4 h-4" />,
     },
     {
       id: "glyphs",
+      stepNum: "2",
       label: "2. Glyphs & Labels",
+      shortLabel: "Glyphs",
       icon: <Type className="w-4 h-4" />,
       badge: glyphCount > 0 ? glyphCount : undefined,
     },
     {
       id: "metrics",
+      stepNum: "3",
       label: "3. Font Standards",
+      shortLabel: "Standards",
       icon: <Sliders className="w-4 h-4" />,
     },
     {
       id: "test",
+      stepNum: "4",
       label: "4. Live Tester",
+      shortLabel: "Test",
       icon: <Play className="w-4 h-4" />,
     },
     {
       id: "export",
+      stepNum: "5",
       label: "5. Export .TTF",
+      shortLabel: "Export",
       icon: <Download className="w-4 h-4" />,
     },
   ];
 
   return (
-    <header className="sticky top-0 z-40 bg-neutral-900/90 backdrop-blur border-b border-neutral-800 text-neutral-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-        {/* Logo & Brand */}
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20 text-neutral-950 font-bold text-lg tracking-wider">
-            F
-          </div>
+    <header className="sticky top-0 z-40 bg-neutral-900/95 backdrop-blur-md border-b border-neutral-800 text-neutral-100 shadow-lg shadow-black/20">
+      {/* Top Primary Bar */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-18 flex items-center justify-between gap-3 sm:gap-6">
+        {/* Brand & Logo */}
+        <div className="flex items-center gap-3 min-w-0 shrink-0">
+          <AppLogo size={38} className="shrink-0 drop-shadow" />
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="font-bold text-base tracking-tight truncate text-neutral-100">
+              <h1 className="font-bold text-sm sm:text-base tracking-tight truncate text-neutral-100">
                 Image to Font Studio
               </h1>
-              <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                TTF Generator
+              <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                TrueType &amp; Color
               </span>
             </div>
-            <p className="text-xs text-neutral-400 truncate">
+            <p className="text-[11px] sm:text-xs text-neutral-400 truncate">
               {fontName || "CustomFont"} • {glyphCount} Glyphs
             </p>
           </div>
         </div>
 
-        {/* Workflow Tabs */}
-        <nav className="hidden md:flex items-center gap-1 bg-neutral-950/70 p-1 rounded-xl border border-neutral-800">
+        {/* Desktop Workflow Navigation Tabs */}
+        <nav className="hidden lg:flex items-center gap-1 bg-neutral-950/80 p-1.5 rounded-2xl border border-neutral-800">
           {tabs.map((tab) => {
             const isActive = currentTab === tab.id;
             return (
@@ -94,17 +103,17 @@ export const Header: React.FC<HeaderProps> = ({
                 key={tab.id}
                 id={`tab-nav-${tab.id}`}
                 onClick={() => onSelectTab(tab.id)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
                   isActive
-                    ? "bg-amber-500 text-neutral-950 font-semibold shadow-sm"
-                    : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60"
+                    ? "bg-amber-500 text-neutral-950 shadow-md shadow-amber-500/20"
+                    : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/80"
                 }`}
               >
                 {tab.icon}
                 <span>{tab.label}</span>
                 {tab.badge !== undefined && (
                   <span
-                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-semibold ${
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
                       isActive
                         ? "bg-neutral-950/20 text-neutral-950"
                         : "bg-neutral-800 text-neutral-300"
@@ -118,15 +127,15 @@ export const Header: React.FC<HeaderProps> = ({
           })}
         </nav>
 
-        {/* Action Buttons */}
+        {/* Header Action Buttons */}
         <div className="flex items-center gap-2 shrink-0">
           {onDownloadColorPack && (
             <button
               id="btn-quick-download-color-pack"
               onClick={onDownloadColorPack}
               disabled={glyphCount === 0}
-              title="Download Real Cultural Color Pack (ZIP)"
-              className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 active:scale-95 text-amber-300 border border-amber-500/30 transition disabled:opacity-40"
+              title="Download Cultural Color Asset Pack (ZIP)"
+              className="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-neutral-850 hover:bg-neutral-800 active:scale-95 text-amber-300 border border-amber-500/30 transition disabled:opacity-40 min-h-[40px]"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
               <span>Cultural ZIP</span>
@@ -137,21 +146,21 @@ export const Header: React.FC<HeaderProps> = ({
             id="btn-quick-generate-font"
             onClick={onGenerateFont}
             disabled={isGenerating || glyphCount === 0}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 active:scale-95 disabled:opacity-50 disabled:pointer-events-none text-neutral-200 border border-neutral-700 transition"
+            className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-neutral-800 hover:bg-neutral-750 active:scale-95 disabled:opacity-50 disabled:pointer-events-none text-neutral-200 border border-neutral-700 transition min-h-[40px]"
           >
             {isGenerating ? (
               <div className="w-3.5 h-3.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
             ) : (
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
             )}
-            <span>{isGenerating ? "Building Font..." : "Build Font"}</span>
+            <span>{isGenerating ? "Building..." : "Build Font"}</span>
           </button>
 
           <button
             id="btn-quick-download-ttf"
             onClick={onDownloadFont}
             disabled={!hasCompiledFont}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-amber-500 hover:bg-amber-400 active:scale-95 text-neutral-950 shadow-md shadow-amber-500/20 disabled:opacity-40 disabled:pointer-events-none transition"
+            className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 active:scale-95 text-neutral-950 shadow-md shadow-amber-500/20 disabled:opacity-40 disabled:pointer-events-none transition min-h-[40px]"
           >
             <Download className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Download .TTF</span>
@@ -160,24 +169,31 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Mobile Tab bar */}
-      <div className="md:hidden flex items-center overflow-x-auto px-4 py-2 gap-1 border-t border-neutral-800/80 bg-neutral-950/60 no-scrollbar">
+      {/* Mobile & Tablet Responsive Tab Bar (always visible on screens below lg) */}
+      <div className="lg:hidden border-t border-neutral-800 bg-neutral-950/90 px-2 sm:px-4 py-1.5 overflow-x-auto scrollbar-none flex items-center justify-between sm:justify-start gap-1 sm:gap-2">
         {tabs.map((tab) => {
           const isActive = currentTab === tab.id;
           return (
             <button
               key={tab.id}
               onClick={() => onSelectTab(tab.id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs whitespace-nowrap shrink-0 transition ${
+              className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-all min-h-[44px] ${
                 isActive
-                  ? "bg-amber-500 text-neutral-950 font-semibold"
-                  : "text-neutral-400 hover:text-neutral-200"
+                  ? "bg-amber-500 text-neutral-950 shadow-md shadow-amber-500/20"
+                  : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-850"
               }`}
             >
-              {tab.icon}
-              <span>{tab.label}</span>
+              <span className="shrink-0">{tab.icon}</span>
+              <span className="hidden xs:inline">{tab.label}</span>
+              <span className="xs:hidden">{tab.stepNum}. {tab.shortLabel}</span>
               {tab.badge !== undefined && (
-                <span className="text-[10px] opacity-80">({tab.badge})</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                    isActive ? "bg-neutral-950/20 text-neutral-950" : "bg-neutral-800 text-neutral-300"
+                  }`}
+                >
+                  {tab.badge}
+                </span>
               )}
             </button>
           );

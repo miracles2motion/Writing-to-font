@@ -82,7 +82,7 @@ export const MetricsCompleter: React.FC<MetricsCompleterProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10 space-y-6 sm:space-y-8">
       {/* Overview Card */}
       <div className="bg-neutral-800/50 border border-neutral-700/80 rounded-2xl p-6 shadow-xl">
         <div className="max-w-3xl space-y-2">
