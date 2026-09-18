@@ -22,6 +22,7 @@ import {
   splitGlyphBbox,
   toggleCharacterCase,
 } from "../utils/glyphUtils";
+import { getAiRequestHeaders } from "../utils/aiClient";
 
 interface GlyphCropModalProps {
   isOpen: boolean;
@@ -381,7 +382,7 @@ export const GlyphCropModal: React.FC<GlyphCropModalProps> = ({
     try {
       const res = await fetch("/api/ai/classify-glyph", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAiRequestHeaders(),
         body: JSON.stringify({
           imageBase64: previewMonoUrl,
           mimeType: "image/png",

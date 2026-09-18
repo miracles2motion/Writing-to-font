@@ -16,20 +16,102 @@ const PORT = 3000;
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-// Lazy Gemini client helper
-let aiClient: GoogleGenAI | null = null;
-function getAI(): GoogleGenAI | null {
-  if (!aiClient && process.env.GEMINI_API_KEY) {
-    aiClient = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build",
+// Lazy Gemini client helper: supports either server process.env.GEMINI_API_KEY
+// or a custom user-provided key passed via Authorization: Bearer <key> / x-gemini-api-key header
+let defaultAiClient: GoogleGenAI | null = null;
+function getAI(customKey?: string | null): GoogleGenAI | null {
+  const activeKey = customKey?.trim() || process.env.GEMINI_API_KEY;
+  if (!activeKey) return null;
+
+  // If using default environment key, memoize instance
+  if (!customKey || customKey.trim() === process.env.GEMINI_API_KEY) {
+    if (!defaultAiClient) {
+      defaultAiClient = new GoogleGenAI({
+        apiKey: activeKey,
+        httpOptions: {
+          headers: {
+            "User-Agent": "aistudio-build",
+          },
         },
-      },
-    });
+      });
+    }
+    return defaultAiClient;
   }
-  return aiClient;
+
+  // If custom user-provided key, instantiate with user's key
+  return new GoogleGenAI({
+    apiKey: activeKey,
+    httpOptions: {
+      headers: {
+        "User-Agent": "aistudio-build",
+      },
+    },
+  });
+}
+
+function extractApiKeyFromReq(req: express.Request): string | null {
+  const authHeader = req.headers["authorization"];
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.slice(7).trim();
+    if (token) return token;
+  }
+  const customHeader = req.headers["x-gemini-api-key"] as string | undefined;
+  if (customHeader && customHeader.trim()) {
+    return customHeader.trim();
+  }
+  if (req.body && typeof req.body.customApiKey === "string" && req.body.customApiKey.trim()) {
+    return req.body.customApiKey.trim();
+  }
+  return null;
+}
+
+function extractModelFromReq(req: express.Request): string {
+  const modelHeader = req.headers["x-gemini-model"] as string | undefined;
+  if (modelHeader && modelHeader.trim()) {
+    return modelHeader.trim();
+  }
+  if (req.body && typeof req.body.preferredModel === "string" && req.body.preferredModel.trim()) {
+    return req.body.preferredModel.trim();
+  }
+  return "gemini-3.8-flash";
+}
+
+/**
+ * Executes a Gemini request with automatic multi-model failover.
+ * If the primary requested model fails (e.g. rate limit 429, temporary 503, or quota),
+ * it seamlessly cascades down standby models.
+ */
+async function generateContentWithFailover(
+  ai: GoogleGenAI,
+  requestedModel: string,
+  params: { contents: any; config?: any }
+): Promise<{ response: any; modelUsed: string }> {
+  // Build fallback model chain starting with the user's requested model
+  const fallbackCandidates = ["gemini-3.8-flash", "gemini-3.1-pro-preview", "gemini-3.1-flash-lite"];
+  const modelChain: string[] = [requestedModel];
+  for (const m of fallbackCandidates) {
+    if (!modelChain.includes(m)) {
+      modelChain.push(m);
+    }
+  }
+
+  let lastError: any = null;
+  for (const modelToTry of modelChain) {
+    try {
+      const response = await ai.models.generateContent({
+        model: modelToTry,
+        contents: params.contents,
+        config: params.config,
+      });
+      return { response, modelUsed: modelToTry };
+    } catch (err: any) {
+      console.warn(`[Gemini Failover] Model '${modelToTry}' failed. Checking next standby model in chain...`, err?.message || err);
+      lastError = err;
+      // Continue to next model in failover chain
+    }
+  }
+
+  throw lastError || new Error("All Gemini failover models exhausted.");
 }
 
 // Health check
@@ -46,10 +128,12 @@ app.post("/api/ai/recognize-glyphs", async (req, res) => {
       return res.status(400).json({ error: "Missing imageBase64 data" });
     }
 
-    const ai = getAI();
+    const customApiKey = extractApiKeyFromReq(req);
+    const preferredModel = extractModelFromReq(req);
+    const ai = getAI(customApiKey);
     if (!ai) {
       return res.status(503).json({
-        error: "GEMINI_API_KEY is not configured in server environment.",
+        error: "No Gemini API key available. Please provide your Gemini API key in App Settings or environment.",
       });
     }
 
@@ -90,8 +174,7 @@ Respond in JSON format with:
 - weight: string
 - description: string`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
+    const { response, modelUsed } = await generateContentWithFailover(ai, preferredModel, {
       contents: {
         parts: [
           {
@@ -137,6 +220,7 @@ Respond in JSON format with:
 
     const resultText = response.text || "{}";
     const parsed = JSON.parse(resultText);
+    parsed._modelUsed = modelUsed;
     return res.json(parsed);
   } catch (error: any) {
     console.error("Error recognizing glyphs:", error);
@@ -154,9 +238,11 @@ app.post("/api/ai/classify-glyph", async (req, res) => {
       return res.status(400).json({ error: "Missing imageBase64" });
     }
 
-    const ai = getAI();
+    const customApiKey = extractApiKeyFromReq(req);
+    const preferredModel = extractModelFromReq(req);
+    const ai = getAI(customApiKey);
     if (!ai) {
-      return res.status(503).json({ error: "GEMINI_API_KEY is not configured." });
+      return res.status(503).json({ error: "No Gemini API key available. Please configure your key in Settings or environment." });
     }
 
     const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, "");
@@ -167,8 +253,7 @@ Identify what exact character this is, paying crucial attention to CASING (upper
 - Look for distinctive lowercase features: loop in 'a', crossbar and ear in 'g', curved top in 'r', ascenders on 'b'/'d'/'h'/'k'/'l'/'t', descenders on 'p'/'q'/'y', etc.
 - Return the single character in 'char', 'casing' ("upper" | "lower" | "digit" | "symbol"), and a 1-sentence 'rationale'.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
+    const { response, modelUsed } = await generateContentWithFailover(ai, preferredModel, {
       contents: {
         parts: [
           { inlineData: { data: cleanBase64, mimeType } },
@@ -191,6 +276,7 @@ Identify what exact character this is, paying crucial attention to CASING (upper
     });
 
     const parsed = JSON.parse(response.text || "{}");
+    parsed._modelUsed = modelUsed;
     return res.json(parsed);
   } catch (err: any) {
     console.error("Error classifying glyph:", err);
@@ -202,10 +288,12 @@ Identify what exact character this is, paying crucial attention to CASING (upper
 app.post("/api/ai/font-advice", async (req, res) => {
   try {
     const { availableCharacters, fontName, fontStyle } = req.body;
-    const ai = getAI();
+    const customApiKey = extractApiKeyFromReq(req);
+    const preferredModel = extractModelFromReq(req);
+    const ai = getAI(customApiKey);
     if (!ai) {
       return res.status(503).json({
-        error: "GEMINI_API_KEY is not configured.",
+        error: "No Gemini API key available. Please configure your key in Settings or environment.",
       });
     }
 
@@ -218,8 +306,7 @@ Provide typography design recommendations:
 3. Recommended spacing (advance width tracking & side-bearings) for this style.
 4. A creative sample pangram or marketing sentence that highlights this font's unique feel.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
+    const { response, modelUsed } = await generateContentWithFailover(ai, preferredModel, {
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -251,10 +338,128 @@ Provide typography design recommendations:
     });
 
     const parsed = JSON.parse(response.text || "{}");
+    parsed._modelUsed = modelUsed;
     return res.json(parsed);
   } catch (error: any) {
     console.error("Error generating font advice:", error);
     return res.status(500).json({ error: error.message || "Failed to get font advice" });
+  }
+});
+
+// AI Font Character Set Expansion: Studies style DNA and synthesizes missing characters
+app.post("/api/ai/expand-glyphs", async (req, res) => {
+  try {
+    const {
+      referenceImageBase64,
+      mimeType = "image/png",
+      existingCharacters = [],
+      targetCharacters = [],
+      fontStyle = "custom display font",
+    } = req.body;
+
+    if (!targetCharacters || targetCharacters.length === 0) {
+      return res.status(400).json({ error: "Missing targetCharacters to generate." });
+    }
+
+    const customApiKey = extractApiKeyFromReq(req);
+    const preferredModel = extractModelFromReq(req);
+    const ai = getAI(customApiKey);
+    if (!ai) {
+      return res.status(503).json({ error: "No Gemini API key available. Please configure your key in Settings or environment." });
+    }
+
+    // Limit batch size to max 28 per request to prevent token truncation
+    const batchTargets = targetCharacters.slice(0, 28);
+
+    const prompt = `You are an elite master type designer, fontographer, and SVG vector artist.
+The user has uploaded a partial character set containing these drawn characters: "${existingCharacters.join(", ")}".
+Artistic style: "${fontStyle}".
+
+TASK:
+Synthesize matching letterforms for each of the following MISSING characters so they fit the exact visual DNA, stroke thickness, curvature, slant, and aesthetic spirit of the user's drawn characters:
+Target characters to synthesize: ${JSON.stringify(batchTargets)}
+
+STRICT DESIGN RULES:
+1. VECTOR SVG PATH:
+   - For EACH target character, provide a valid, self-contained SVG path string (the 'd' attribute of an SVG <path>).
+   - Coordinates MUST be normalized within a 100x100 box:
+     - Baseline is at y = 80.
+     - Cap-height top is at y = 15.
+     - X-height (for lowercase without ascenders) top is at y = 38.
+     - Descender bottom (for g, j, p, q, y) reaches down to y = 95.
+     - Left-to-right advance is centered comfortably between x = 10 and x = 90.
+   - The path must be FILLED black (do not use open stroke lines without thickness; the path must enclose the pen/brush stroke volume so it can be filled).
+   - The stroke thickness, serif treatment, and curvature must closely imitate the reference image characters.
+
+2. PROPORTIONS & CASING:
+   - If target is lowercase (e.g. 'a', 'b', 'c'), ensure true lowercase anatomy with proper x-height and natural ascenders/descenders.
+   - If target is a digit (0-9), match the height and optical weight of the uppercase letters.
+   - If target is punctuation, match the pen stroke thickness.
+
+Respond strictly in JSON format with an array of synthesized characters.`;
+
+    const parts: any[] = [];
+    if (referenceImageBase64) {
+      const cleanBase64 = referenceImageBase64.replace(/^data:image\/\w+;base64,/, "");
+      parts.push({
+        inlineData: {
+          data: cleanBase64,
+          mimeType,
+        },
+      });
+    }
+    parts.push({ text: prompt });
+
+    const { response, modelUsed } = await generateContentWithFailover(ai, preferredModel, {
+      contents: { parts },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            styleAnalysis: {
+              type: Type.STRING,
+              description: "Brief analysis of stroke weight, curvature, and stylistic traits",
+            },
+            synthesizedGlyphs: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  char: {
+                    type: Type.STRING,
+                    description: "The target single character",
+                  },
+                  svgPath: {
+                    type: Type.STRING,
+                    description: "Complete SVG path 'd' attribute normalized to 100x100 bounding box",
+                  },
+                  advanceWidth: {
+                    type: Type.NUMBER,
+                    description: "Advance width suggestion (typically 70-110)",
+                  },
+                  notes: {
+                    type: Type.STRING,
+                    description: "Design rationale",
+                  },
+                },
+                required: ["char", "svgPath"],
+              },
+            },
+          },
+          required: ["synthesizedGlyphs"],
+        },
+      },
+    });
+
+    const parsed = JSON.parse(response.text || "{}");
+    parsed._modelUsed = modelUsed;
+    return res.json(parsed);
+  } catch (error: any) {
+    console.error("Error expanding character set with AI:", error);
+    return res.status(500).json({
+      error: error.message || "Failed to expand character set with AI.",
+    });
   }
 });
 

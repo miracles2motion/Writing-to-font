@@ -6,6 +6,7 @@ import {
   Type,
   Sliders,
   Play,
+  Key,
 } from "lucide-react";
 import { StudioTab } from "../types";
 import { AppLogo } from "./AppLogo";
@@ -19,6 +20,9 @@ interface HeaderProps {
   onDownloadFont: () => void;
   onDownloadColorPack?: () => void;
   onGenerateFont: () => void;
+  onOpenApiKeyModal?: () => void;
+  hasCustomApiKey?: boolean;
+  activeModel?: string;
   isGenerating: boolean;
 }
 
@@ -31,6 +35,9 @@ export const Header: React.FC<HeaderProps> = ({
   onDownloadFont,
   onDownloadColorPack,
   onGenerateFont,
+  onOpenApiKeyModal,
+  hasCustomApiKey,
+  activeModel = "gemini-3.8-flash",
   isGenerating,
 }) => {
   const tabs: { id: StudioTab; stepNum: string; label: string; shortLabel: string; icon: React.ReactNode; badge?: string | number }[] = [
@@ -129,6 +136,29 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Header Action Buttons */}
         <div className="flex items-center gap-2 shrink-0">
+          {onOpenApiKeyModal && (
+            <button
+              id="btn-open-api-key-modal"
+              type="button"
+              onClick={onOpenApiKeyModal}
+              title={`Gemini Engine: ${activeModel}. Click to configure API Key or switch models.`}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition active:scale-95 min-h-[40px] ${
+                hasCustomApiKey
+                  ? "bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/40"
+                  : "bg-neutral-850 hover:bg-neutral-800 text-neutral-300 border-neutral-700/80"
+              }`}
+            >
+              <Key className={`w-3.5 h-3.5 ${hasCustomApiKey ? "text-amber-400" : "text-neutral-400"}`} />
+              <span className="hidden sm:inline">{hasCustomApiKey ? "AI Engine" : "AI Settings"}</span>
+              <span className="hidden xl:inline text-[10px] font-mono px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-750 text-neutral-400">
+                {activeModel.replace("gemini-", "").replace("-preview", "")}
+              </span>
+              {hasCustomApiKey && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+              )}
+            </button>
+          )}
+
           {onDownloadColorPack && (
             <button
               id="btn-quick-download-color-pack"

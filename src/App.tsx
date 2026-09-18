@@ -26,6 +26,9 @@ import {
 import { downloadColorAssetPackZip } from "./utils/colorAssetExporter";
 import { SEQUENCE_PATTERNS } from "./utils/glyphUtils";
 import { ProcessingOverlay } from "./components/ProcessingOverlay";
+import { CharacterExpanderModal } from "./components/CharacterExpanderModal";
+import { ApiKeyModal, getCustomApiKey, getCustomModelPreference } from "./components/ApiKeyModal";
+import { getAiRequestHeaders } from "./utils/aiClient";
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<StudioTab>("upload");
@@ -84,7 +87,26 @@ export default function App() {
   const [compiledFontResult, setCompiledFontResult] = useState<FontBuildResult | null>(null);
   const [isBuildingFont, setIsBuildingFont] = useState(false);
   const [isAiLabeling, setIsAiLabeling] = useState(false);
+  const [isExpanderModalOpen, setIsExpanderModalOpen] = useState(false);
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [hasCustomApiKey, setHasCustomApiKey] = useState(() => Boolean(getCustomApiKey()));
+  const [activeModel, setActiveModel] = useState<string>(() => getCustomModelPreference());
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleKeyUpdate = () => {
+      setHasCustomApiKey(Boolean(getCustomApiKey()));
+    };
+    const handleModelUpdate = (e: any) => {
+      setActiveModel(e.detail || getCustomModelPreference());
+    };
+    window.addEventListener("gemini-api-key-updated", handleKeyUpdate);
+    window.addEventListener("gemini-model-updated", handleModelUpdate);
+    return () => {
+      window.removeEventListener("gemini-api-key-updated", handleKeyUpdate);
+      window.removeEventListener("gemini-model-updated", handleModelUpdate);
+    };
+  }, []);
 
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -95,6 +117,34 @@ export default function App() {
       setToastMessage(null);
     }, 3500);
   }, []);
+
+  // Handler to merge newly synthesized glyphs into the glyph set
+  const handleAddExpandedGlyphs = useCallback(
+    (newGlyphs: DetectedGlyph[]) => {
+      setGlyphs((prev) => {
+        const map = new Map(prev.map((g) => [g.char, g]));
+        newGlyphs.forEach((g) => {
+          map.set(g.char, g);
+        });
+        const combined = Array.from(map.values());
+
+        // Re-compile font asynchronously with expanded set
+        setTimeout(() => {
+          try {
+            const buildRes = buildFontFromGlyphs(combined, fontSettings);
+            applyDynamicFontFace(fontSettings.family, buildRes.arrayBuffer);
+            setCompiledFontResult(buildRes);
+          } catch (e) {
+            console.error("Auto compile after expansion failed:", e);
+          }
+        }, 80);
+
+        return combined;
+      });
+      showToast(`Successfully expanded font with ${newGlyphs.length} synthesized characters!`);
+    },
+    [fontSettings, showToast]
+  );
 
   // Process image and extract glyphs with rich staged progress updates
   const processImage = useCallback(
@@ -636,7 +686,7 @@ export default function App() {
     try {
       const res = await fetch("/api/ai/recognize-glyphs", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAiRequestHeaders(),
         body: JSON.stringify({
           imageBase64: sourceImageUrl,
           mimeType: "image/png",
@@ -706,6 +756,9 @@ export default function App() {
         onDownloadFont={handleDownloadTtf}
         onDownloadColorPack={handleDownloadColorAssetPack}
         onGenerateFont={handleGenerateFont}
+        onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
+        hasCustomApiKey={hasCustomApiKey}
+        activeModel={activeModel}
         isGenerating={isBuildingFont}
       />
 
@@ -748,6 +801,7 @@ export default function App() {
             onAutoSequence={handleAutoSequence}
             onAiAutoLabel={handleAiAutoLabel}
             onProceedToMetrics={() => setCurrentTab("metrics")}
+            onOpenExpanderModal={() => setIsExpanderModalOpen(true)}
             isAiLabeling={isAiLabeling}
           />
         )}
@@ -761,6 +815,7 @@ export default function App() {
               await handleGenerateFont();
               setCurrentTab("test");
             }}
+            onOpenExpanderModal={() => setIsExpanderModalOpen(true)}
             isBuilding={isBuildingFont}
           />
         )}
@@ -797,6 +852,25 @@ export default function App() {
         fileName={processingState.fileName}
         currentStepIndex={processingState.currentStepIndex}
         detectedCount={processingState.detectedCount}
+      />
+
+      {/* Character Extrapolation & Font Expansion Modal */}
+      <CharacterExpanderModal
+        isOpen={isExpanderModalOpen}
+        onClose={() => setIsExpanderModalOpen(false)}
+        glyphs={glyphs}
+        onAddExpandedGlyphs={handleAddExpandedGlyphs}
+        sourceImageUrl={sourceImageUrl}
+        colorCanvasDataUrl={colorCanvasDataUrl}
+        fontStyle={fontSettings.styleName}
+        showToast={showToast}
+      />
+
+      {/* Gemini API Key Settings Modal */}
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => setIsApiKeyModalOpen(false)}
+        showToast={showToast}
       />
 
       {/* Footer */}

@@ -43,6 +43,7 @@ interface GlyphGridProps {
   onAutoSequence: (patternId: string) => void;
   onAiAutoLabel: () => void;
   onProceedToMetrics: () => void;
+  onOpenExpanderModal?: () => void;
   isAiLabeling: boolean;
 }
 
@@ -64,6 +65,7 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
   onAutoSequence,
   onAiAutoLabel,
   onProceedToMetrics,
+  onOpenExpanderModal,
   isAiLabeling,
 }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -162,6 +164,20 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
 
           {/* Top Actions: AI Auto-Label, Review All Cutouts & Sequencing */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* Expand to Full Font Set Modal Trigger */}
+            {onOpenExpanderModal && (
+              <button
+                id="btn-open-character-expander"
+                onClick={onOpenExpanderModal}
+                disabled={glyphs.length === 0}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition active:scale-95 shadow-sm disabled:opacity-50"
+                title="Synthesize missing lowercase, digits, or punctuation based on your drawn characters"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>Expand to Full Set</span>
+              </button>
+            )}
+
             {/* Step-by-Step Cutout Review */}
             <button
               id="btn-review-cutouts-step-by-step"
@@ -407,6 +423,16 @@ export const GlyphGrid: React.FC<GlyphGridProps> = ({
                   <Square className="w-4 h-4 text-neutral-600 group-hover:text-neutral-400" />
                 )}
               </button>
+
+              {/* Synthesized / Extrapolated badge */}
+              {glyph.isSynthesized && (
+                <span
+                  title="Synthesized to match your font's look and feel"
+                  className="absolute top-2.5 left-7 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 z-10"
+                >
+                  Synth
+                </span>
+              )}
 
               {/* Top Right: Edit Crop / Delete Buttons */}
               <div className="absolute top-2 right-2 flex items-center gap-1 z-10 opacity-0 group-hover:opacity-100 transition">

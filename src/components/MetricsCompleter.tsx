@@ -10,12 +10,14 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { FontSettings, DetectedGlyph } from "../types";
+import { getAiRequestHeaders } from "../utils/aiClient";
 
 interface MetricsCompleterProps {
   settings: FontSettings;
   glyphs: DetectedGlyph[];
   onUpdateSettings: (settings: Partial<FontSettings>) => void;
   onBuildAndTest: () => void;
+  onOpenExpanderModal?: () => void;
   isBuilding: boolean;
 }
 
@@ -24,6 +26,7 @@ export const MetricsCompleter: React.FC<MetricsCompleterProps> = ({
   glyphs,
   onUpdateSettings,
   onBuildAndTest,
+  onOpenExpanderModal,
   isBuilding,
 }) => {
   const [aiAdvice, setAiAdvice] = useState<any>(null);
@@ -49,7 +52,7 @@ export const MetricsCompleter: React.FC<MetricsCompleterProps> = ({
       setLoadingAdvice(true);
       const res = await fetch("/api/ai/font-advice", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAiRequestHeaders(),
         body: JSON.stringify({
           availableCharacters: Array.from(charSet),
           fontName: settings.name,
@@ -215,6 +218,20 @@ export const MetricsCompleter: React.FC<MetricsCompleterProps> = ({
                 <div className="w-11 h-6 bg-neutral-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
               </label>
             </div>
+
+            {/* Deep Expansion Trigger */}
+            {onOpenExpanderModal && (
+              <div className="pt-2 border-t border-neutral-750/70">
+                <button
+                  type="button"
+                  onClick={onOpenExpanderModal}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition active:scale-95 shadow-sm"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  <span>Synthesize Missing Lowercase, Digits & Symbols to Glyph Set</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Font Identification / Naming */}
