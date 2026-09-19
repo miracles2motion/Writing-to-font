@@ -59,7 +59,7 @@ interface GlyphCropModalProps {
   onClose: () => void;
 }
 
-type EditorTool = "select-crop" | "eraser" | "pen" | "magic-island" | "lasso-cutout" | "lasso-keep";
+type EditorTool = "select-crop" | "eraser" | "pen" | "magic-island" | "lasso-cutout" | "lasso-keep" | "polygon-cutout";
 type DragHandleType =
   | "nw"
   | "n"
@@ -904,7 +904,7 @@ export const GlyphCropModal: React.FC<GlyphCropModalProps> = ({
       if (currentTool === "eraser") setMouseCursor("crosshair");
       else if (currentTool === "pen") setMouseCursor("crosshair");
       else if (currentTool === "magic-island") setMouseCursor("pointer");
-      else if (currentTool.startsWith("lasso")) setMouseCursor("crosshair");
+      else if (currentTool.startsWith("lasso") || currentTool === "polygon-cutout") setMouseCursor("crosshair");
       else setMouseCursor("default");
       return;
     }
@@ -969,6 +969,10 @@ export const GlyphCropModal: React.FC<GlyphCropModalProps> = ({
       }
       if (currentTool === "pen") {
         applyBrush(localGlyphX, localGlyphY, "draw");
+        return;
+      }
+      if (currentTool === "polygon-cutout") {
+        setLassoPoints((prev) => [...prev, { x: localGlyphX, y: localGlyphY }]);
         return;
       }
       if (currentTool.startsWith("lasso")) {
@@ -1485,6 +1489,23 @@ export const GlyphCropModal: React.FC<GlyphCropModalProps> = ({
 
                     <button
                       type="button"
+                      onClick={() => {
+                        setCurrentTool("polygon-cutout");
+                        setLassoPoints([]);
+                      }}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-xl font-semibold transition ${
+                        currentTool === "polygon-cutout"
+                          ? "bg-amber-500 text-neutral-950 font-bold shadow-sm"
+                          : "bg-neutral-900 text-neutral-300 hover:bg-neutral-800"
+                      }`}
+                      title="Click points around complex intersecting glyphs to mask them"
+                    >
+                      <Crop className="w-3.5 h-3.5" />
+                      <span>Polygon Mask</span>
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => setCurrentTool("pen")}
                       className={`flex items-center gap-1 px-3 py-1.5 rounded-xl font-semibold transition ${
                         currentTool === "pen"
@@ -1518,7 +1539,7 @@ export const GlyphCropModal: React.FC<GlyphCropModalProps> = ({
                 {lassoPoints.length >= 3 && (
                   <div className="p-2 bg-neutral-900 rounded-xl border border-sky-500/30 flex items-center justify-between gap-2 animate-in fade-in">
                     <span className="text-xs text-sky-300 font-medium">
-                      Lasso Loop ({lassoPoints.length} pts):
+                      Selection Polygon ({lassoPoints.length} pts):
                     </span>
                     <div className="flex items-center gap-2">
                       <button

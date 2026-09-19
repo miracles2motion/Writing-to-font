@@ -1,0 +1,12 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/ai/classify-glyph/route": "app/api/ai/classify-glyph/route.js",
+  "/api/ai/expand-glyphs/route": "app/api/ai/expand-glyphs/route.js",
+  "/api/ai/font-advice/route": "app/api/ai/font-advice/route.js",
+  "/api/ai/harvest-alphabet-from-notes/route": "app/api/ai/harvest-alphabet-from-notes/route.js",
+  "/api/ai/models/route": "app/api/ai/models/route.js",
+  "/api/ai/recognize-glyphs/route": "app/api/ai/recognize-glyphs/route.js",
+  "/api/ai/status/route": "app/api/ai/status/route.js",
+  "/api/health/route": "app/api/health/route.js",
+  "/page": "app/page.js"
+}

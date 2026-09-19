@@ -69,7 +69,44 @@ export async function generateContentWithFailover(
   params: { contents: any; config?: any },
   timeoutMs: number = 22000
 ): Promise<{ response: any; modelUsed: string }> {
-  const fallbackCandidates = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"];
+  let fallbackCandidates = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"];
+  try {
+    const listRes = await ai.models.list();
+    const rawList: any[] = [];
+    if (listRes) {
+      if (Symbol.asyncIterator in Object(listRes)) {
+        for await (const m of listRes as any) rawList.push(m);
+      } else if (Array.isArray((listRes as any).models)) {
+        rawList.push(...(listRes as any).models);
+      } else if (Array.isArray(listRes)) {
+        rawList.push(...listRes);
+      }
+    }
+    const dynamicModels = rawList
+      .map((m) => {
+         const name = m.name || m.id || "";
+         return name.replace(/^models\//, "");
+      })
+      .filter((m) => m.includes("gemini") && !m.includes("embedding") && !m.includes("aqa") && !m.includes("imagen") && !m.includes("vision"))
+      .sort((a, b) => {
+         const score = (model: string) => {
+           let s = 0;
+           if (model.includes("pro")) s += 100;
+           if (model.includes("flash")) s += 50;
+           if (model.includes("2.5")) s += 30;
+           if (model.includes("2.0")) s += 20;
+           if (model.includes("1.5")) s += 10;
+           return s;
+         };
+         return score(b) - score(a);
+      });
+    if (dynamicModels.length > 0) {
+      fallbackCandidates = dynamicModels;
+    }
+  } catch (e) {
+    console.warn("Failed to fetch dynamic models for failover. Using hardcoded fallback list.", e);
+  }
+
   const modelChain: string[] = [requestedModel];
   for (const m of fallbackCandidates) {
     if (!modelChain.includes(m)) {

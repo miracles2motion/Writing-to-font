@@ -32,20 +32,22 @@ export async function POST(req: NextRequest) {
 
     const prompt = `You are a world-class typographic analyst, font engineer, and OCR specialist.
 Analyze this character sheet image containing hand-drawn or designed alphabet characters, numbers, and symbols on a white background.
-There are approximately ${detectedCount || "20-60"} glyphs arranged in rows or a grid.
+There are approximately ${detectedCount || "20-60"} glyphs arranged in rows or a grid. Note that this grid might be highly complex, dense, and heavily overlapping.
 
 CRITICAL CASING & CHARACTER RECOGNITION RULES:
 1. RIGOROUS UPPERCASE (A-Z) VS. LOWERCASE (a-z) DIFFERENTIATION:
-   - Carefully examine the visual anatomy and relative proportions:
-     - Distinct lowercase shapes: 'a' vs 'A', 'b' vs 'B', 'd' vs 'D', 'e' vs 'E', 'g' vs 'G', 'm' vs 'M', 'n' vs 'N', 'q' vs 'Q', 'r' vs 'R', 't' vs 'T'.
-     - Ascenders extending tall: lowercase 'b', 'd', 'f', 'h', 'k', 'l', 't'.
-     - Descenders dipping low: lowercase 'g', 'j', 'p', 'q', 'y'.
-     - X-height characters: 'c', 'o', 's', 'v', 'w', 'x', 'z'. If they appear alongside capitals and are clearly shorter (x-height), identify them as lowercase ('c', 'o', 's'...), NOT uppercase.
+   - Carefully examine the visual anatomy and relative proportions.
+   - Distinct lowercase shapes: 'a' vs 'A', 'b' vs 'B', 'd' vs 'D', 'e' vs 'E', 'g' vs 'G', 'm' vs 'M', 'n' vs 'N', 'q' vs 'Q', 'r' vs 'R', 't' vs 'T'.
+   - Ascenders extending tall: lowercase 'b', 'd', 'f', 'h', 'k', 'l', 't'.
+   - Descenders dipping low: lowercase 'g', 'j', 'p', 'q', 'y'.
+   - X-height characters: 'c', 'o', 's', 'v', 'w', 'x', 'z'. If they appear alongside capitals and are clearly shorter (x-height), identify them as lowercase ('c', 'o', 's'...), NOT uppercase.
    - If the user wrote lowercase characters, OUTPUT THEM STRICTLY IN LOWERCASE (e.g. "a", "b", "c").
    - NEVER convert lowercase letters into uppercase letters!
-   - If the sheet has uppercase followed by lowercase (e.g. A-Z on top rows, a-z on bottom rows, or paired Aa, Bb, Cc), preserve each letter's exact casing.
-
-2. DIGITS & SYMBOLS:
+   - If the sheet has uppercase followed by lowercase, preserve each letter's exact casing.
+   
+2. COMPLEX & DENSED GRIDS:
+   - Identify every single character, no matter how complex, distorted, or densely packed.
+   - Some symbols might look like intersections. Be meticulous.
    - Digits 0-9: "0", "1", "2", "3", "4", "5", "6", "7", "8", "9".
    - Punctuation & Symbols: "!", "?", ".", ",", ":", ";", "'", '"', "-", "+", "=", "/", "@", "#", "$", "%", "&", "*", "(", ")".
 
@@ -53,7 +55,7 @@ CRITICAL CASING & CHARACTER RECOGNITION RULES:
    - List all detected characters strictly in natural visual reading order: row by row, from top-to-bottom and left-to-right.
 
 4. METRICS & STYLE:
-   - Describe the font's artistic style (e.g. "African Cultural Display Sans", "Handmade Casual Marker", "Geometric Minimalist").
+   - Describe the font's artistic style.
    - Suggest an evocative font family name matching its personality.
    - Estimate weight (e.g. "Regular", "Bold", "Black").
 
@@ -77,6 +79,7 @@ Respond in JSON format with:
         ],
       },
       config: {
+        temperature: 0.1,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
